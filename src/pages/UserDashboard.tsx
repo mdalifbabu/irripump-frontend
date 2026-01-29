@@ -159,7 +159,7 @@ const UserDashboard = () => {
               <Map className="w-4 h-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-3xl font-bold">{stats.totalSizeBigha.toFixed(2)}</div>
+              <div className="text-3xl font-bold">{Number(stats.totalSizeBigha).toFixed(2)}</div>
               <p className="text-xs text-muted-foreground mt-1">Total bigha</p>
             </CardContent>
           </Card>
@@ -170,7 +170,7 @@ const UserDashboard = () => {
               <DollarSign className="w-4 h-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-3xl font-bold text-green-600">৳{stats.totalIncome.toFixed(2)}</div>
+              <div className="text-3xl font-bold text-green-600">৳{Number(stats.totalIncome).toFixed(2)}</div>
               <p className="text-xs text-muted-foreground mt-1">Collected payments</p>
             </CardContent>
           </Card>
@@ -181,7 +181,7 @@ const UserDashboard = () => {
               <DollarSign className="w-4 h-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-3xl font-bold text-red-600">৳{stats.totalDue.toFixed(2)}</div>
+              <div className="text-3xl font-bold text-red-600">৳{Number(stats.totalDue).toFixed(2)}</div>
               <p className="text-xs text-muted-foreground mt-1">Outstanding payments</p>
             </CardContent>
           </Card>

@@ -1,25 +1,25 @@
 import type {
   AuthResponse,
-  User,
-  Pump,
-  Farmer,
-  Land,
-  UnitPrice,
-  Payment,
-  DashboardStats,
-  Setting,
-  FarmerPortalData,
-  LoginRequest,
-  RefreshTokenRequest,
-  CreateUserRequest,
-  CreatePumpRequest,
   CreateFarmerRequest,
   CreateLandRequest,
-  CreateUnitPriceRequest,
   CreatePaymentRequest,
-  UpdatePaymentRequest,
-  VerifyFarmerCodeRequest,
+  CreatePumpRequest,
   CreateSettingRequest,
+  CreateUnitPriceRequest,
+  CreateUserRequest,
+  DashboardStats,
+  Farmer,
+  FarmerPortalData,
+  Land,
+  LoginRequest,
+  Payment,
+  Pump,
+  RefreshTokenRequest,
+  Setting,
+  UnitPrice,
+  UpdatePaymentRequest,
+  User,
+  VerifyFarmerCodeRequest,
 } from "./types";
 
 const API_BASE_URL = "http://localhost:8081/api";
@@ -33,7 +33,8 @@ export const tokenManager = {
   getToken: (): string | null => localStorage.getItem(TOKEN_KEY),
   setToken: (token: string) => localStorage.setItem(TOKEN_KEY, token),
   getRefreshToken: (): string | null => localStorage.getItem(REFRESH_TOKEN_KEY),
-  setRefreshToken: (token: string) => localStorage.setItem(REFRESH_TOKEN_KEY, token),
+  setRefreshToken: (token: string) =>
+    localStorage.setItem(REFRESH_TOKEN_KEY, token),
   getUser: (): { userId: number; role: string } | null => {
     const user = localStorage.getItem(USER_KEY);
     return user ? JSON.parse(user) : null;
@@ -50,10 +51,10 @@ export const tokenManager = {
 // API client with error handling and token refresh
 async function apiRequest<T>(
   endpoint: string,
-  options: RequestInit = {}
+  options: RequestInit = {},
 ): Promise<T> {
   const token = tokenManager.getToken();
-  
+
   const headers: HeadersInit = {
     "Content-Type": "application/json",
     ...options.headers,
@@ -73,24 +74,28 @@ async function apiRequest<T>(
     const refreshToken = tokenManager.getRefreshToken();
     if (refreshToken) {
       try {
-        const refreshResponse = await fetch(`${API_BASE_URL}/auth/refresh-token`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ refreshToken }),
-        });
+        const refreshResponse = await fetch(
+          `${API_BASE_URL}/auth/refresh-token`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ refreshToken }),
+          },
+        );
 
         if (refreshResponse.ok) {
           const data: AuthResponse = await refreshResponse.json();
           tokenManager.setToken(`${data.type} ${data.accessToken}`);
           tokenManager.setRefreshToken(data.refreshToken);
-          
+
           // Retry original request
-          (headers as Record<string, string>)["Authorization"] = `${data.type} ${data.accessToken}`;
+          (headers as Record<string, string>)["Authorization"] =
+            `${data.type} ${data.accessToken}`;
           const retryResponse = await fetch(`${API_BASE_URL}${endpoint}`, {
             ...options,
             headers,
           });
-          
+
           if (!retryResponse.ok) {
             throw new Error(`API Error: ${retryResponse.status}`);
           }
@@ -115,7 +120,7 @@ async function apiRequest<T>(
   if (contentType && contentType.includes("application/json")) {
     return response.json();
   }
-  
+
   return {} as T;
 }
 
@@ -188,7 +193,7 @@ export const pumpApi = {
   },
 
   getAll: async (): Promise<Pump[]> => {
-    return apiRequest<Pump[]>("/admin/pumps");
+    return apiRequest<Pump[]>("/pump/pumps");
   },
 
   getById: async (id: number): Promise<Pump> => {
@@ -198,7 +203,10 @@ export const pumpApi = {
 
 // Farmer API
 export const farmerApi = {
-  create: async (pumpId: number, data: CreateFarmerRequest): Promise<Farmer> => {
+  create: async (
+    pumpId: number,
+    data: CreateFarmerRequest,
+  ): Promise<Farmer> => {
     return apiRequest<Farmer>(`/farmers/pump/${pumpId}`, {
       method: "POST",
       body: JSON.stringify(data),
@@ -207,7 +215,7 @@ export const farmerApi = {
 
   search: async (pumpId: number, query: string): Promise<Farmer[]> => {
     return apiRequest<Farmer[]>(
-      `/farmers/pump/${pumpId}/search?query=${encodeURIComponent(query)}`
+      `/farmers/pump/${pumpId}/search?query=${encodeURIComponent(query)}`,
     );
   },
 
@@ -236,7 +244,10 @@ export const landApi = {
 
 // Unit Price API
 export const unitPriceApi = {
-  create: async (pumpId: number, data: CreateUnitPriceRequest): Promise<UnitPrice> => {
+  create: async (
+    pumpId: number,
+    data: CreateUnitPriceRequest,
+  ): Promise<UnitPrice> => {
     return apiRequest<UnitPrice>(`/unit-prices/pump/${pumpId}`, {
       method: "POST",
       body: JSON.stringify(data),
@@ -250,14 +261,20 @@ export const unitPriceApi = {
 
 // Payment API
 export const paymentApi = {
-  create: async (farmerId: number, data: CreatePaymentRequest): Promise<Payment> => {
+  create: async (
+    farmerId: number,
+    data: CreatePaymentRequest,
+  ): Promise<Payment> => {
     return apiRequest<Payment>(`/payments/farmer/${farmerId}`, {
       method: "POST",
       body: JSON.stringify(data),
     });
   },
 
-  update: async (paymentId: number, data: UpdatePaymentRequest): Promise<Payment> => {
+  update: async (
+    paymentId: number,
+    data: UpdatePaymentRequest,
+  ): Promise<Payment> => {
     return apiRequest<Payment>(`/payments/${paymentId}/update`, {
       method: "PUT",
       body: JSON.stringify(data),
@@ -280,11 +297,14 @@ export const dashboardApi = {
 export const reportsApi = {
   downloadInvoice: async (farmerId: number): Promise<Blob> => {
     const token = tokenManager.getToken();
-    const response = await fetch(`${API_BASE_URL}/reports/farmer/${farmerId}/invoice`, {
-      headers: {
-        Authorization: token || "",
+    const response = await fetch(
+      `${API_BASE_URL}/reports/farmer/${farmerId}/invoice`,
+      {
+        headers: {
+          Authorization: token || "",
+        },
       },
-    });
+    );
     if (!response.ok) {
       throw new Error("Failed to download invoice");
     }
@@ -294,7 +314,10 @@ export const reportsApi = {
 
 // Settings API
 export const settingsApi = {
-  create: async (pumpId: number, data: CreateSettingRequest): Promise<Setting> => {
+  create: async (
+    pumpId: number,
+    data: CreateSettingRequest,
+  ): Promise<Setting> => {
     return apiRequest<Setting>(`/settings/pump/${pumpId}`, {
       method: "POST",
       body: JSON.stringify(data),
@@ -308,7 +331,9 @@ export const settingsApi = {
 
 // Farmer Portal API
 export const farmerPortalApi = {
-  verifyCode: async (data: VerifyFarmerCodeRequest): Promise<FarmerPortalData> => {
+  verifyCode: async (
+    data: VerifyFarmerCodeRequest,
+  ): Promise<FarmerPortalData> => {
     return apiRequest<FarmerPortalData>("/farmer-portal/verify-code", {
       method: "POST",
       body: JSON.stringify(data),
