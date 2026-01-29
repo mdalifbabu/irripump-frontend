@@ -6,7 +6,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { dashboardApi, pumpApi } from "@/lib/api/client";
 import type { DashboardStats, Pump } from "@/lib/api/types";
-import { Droplet, Users, DollarSign, LogOut, Settings, FileText, Map, CreditCard } from "lucide-react";
+import { Droplet, Users, DollarSign, LogOut, Map, CreditCard } from "lucide-react";
 import {
   Select,
   SelectContent,
@@ -191,11 +191,11 @@ const UserDashboard = () => {
           <CardHeader>
             <CardTitle>Quick Actions / দ্রুত কার্যক্রম</CardTitle>
           </CardHeader>
-          <CardContent className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <CardContent className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             <Button
               className="w-full justify-start"
               variant="outline"
-              onClick={() => navigate(`/user/farmers?pumpId=${selectedPumpId}`)}
+              onClick={() => navigate("/user/farmers")}
             >
               <Users className="w-4 h-4 mr-2" />
               Manage Farmers / কৃষক পরিচালনা
@@ -203,31 +203,7 @@ const UserDashboard = () => {
             <Button
               className="w-full justify-start"
               variant="outline"
-              onClick={() => navigate(`/user/lands?pumpId=${selectedPumpId}`)}
-            >
-              <Map className="w-4 h-4 mr-2" />
-              Manage Lands / জমি পরিচালনা
-            </Button>
-            <Button
-              className="w-full justify-start"
-              variant="outline"
-              onClick={() => navigate(`/user/payments?pumpId=${selectedPumpId}`)}
-            >
-              <CreditCard className="w-4 h-4 mr-2" />
-              Track Payments / পেমেন্ট ট্র্যাকিং
-            </Button>
-            <Button
-              className="w-full justify-start"
-              variant="outline"
-              onClick={() => navigate(`/user/invoices?pumpId=${selectedPumpId}`)}
-            >
-              <FileText className="w-4 h-4 mr-2" />
-              Generate Invoice / ইনভয়েস
-            </Button>
-            <Button
-              className="w-full justify-start"
-              variant="outline"
-              onClick={() => navigate(`/user/unit-prices?pumpId=${selectedPumpId}`)}
+              onClick={() => navigate("/user/unit-prices")}
             >
               <DollarSign className="w-4 h-4 mr-2" />
               Unit Prices / ইউনিট মূল্য
@@ -235,10 +211,10 @@ const UserDashboard = () => {
             <Button
               className="w-full justify-start"
               variant="outline"
-              onClick={() => navigate(`/user/settings?pumpId=${selectedPumpId}`)}
+              onClick={() => navigate("/user/farmers")}
             >
-              <Settings className="w-4 h-4 mr-2" />
-              Settings / সেটিংস
+              <CreditCard className="w-4 h-4 mr-2" />
+              Track Payments / পেমেন্ট ট্র্যাকিং
             </Button>
           </CardContent>
         </Card>
