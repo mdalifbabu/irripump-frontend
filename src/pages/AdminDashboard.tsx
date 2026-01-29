@@ -1,62 +1,49 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
-import { Droplet, Users, Settings, LogOut } from "lucide-react";
+import { useAuth } from "@/contexts/AuthContext";
+import { pumpApi } from "@/lib/api/client";
+import { Droplet, Users, Settings, LogOut, Plus, Building } from "lucide-react";
 
 const AdminDashboard = () => {
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState({
     pumps: 0,
     users: 0,
-    farmers: 0,
   });
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { user, logout, isAuthenticated, isLoading } = useAuth();
 
   useEffect(() => {
-    checkAccess();
-    fetchStats();
-  }, []);
-
-  const checkAccess = async () => {
-    const { data: { user } } = await supabase.auth.getUser();
-    
-    if (!user) {
+    if (!isLoading && !isAuthenticated) {
       navigate("/auth");
       return;
     }
 
-    const { data: roles } = await supabase
-      .from("user_roles")
-      .select("role")
-      .eq("user_id", user.id)
-      .eq("role", "admin");
-
-    if (!roles || roles.length === 0) {
+    if (!isLoading && user?.role !== "ADMIN") {
       toast({
         title: "Access Denied",
         description: "You don't have admin access",
         variant: "destructive",
       });
       navigate("/auth");
+      return;
     }
-  };
+
+    if (!isLoading && isAuthenticated) {
+      fetchStats();
+    }
+  }, [isLoading, isAuthenticated, user, navigate, toast]);
 
   const fetchStats = async () => {
     try {
-      const [pumpsRes, usersRes, farmersRes] = await Promise.all([
-        supabase.from("pumps").select("id", { count: "exact", head: true }),
-        supabase.from("profiles").select("id", { count: "exact", head: true }),
-        supabase.from("farmers").select("id", { count: "exact", head: true }),
-      ]);
-
+      const pumps = await pumpApi.getAll();
       setStats({
-        pumps: pumpsRes.count || 0,
-        users: usersRes.count || 0,
-        farmers: farmersRes.count || 0,
+        pumps: pumps.length,
+        users: 0, // Will be populated when user list API is available
       });
     } catch (error) {
       console.error("Error fetching stats:", error);
@@ -66,9 +53,17 @@ const AdminDashboard = () => {
   };
 
   const handleLogout = async () => {
-    await supabase.auth.signOut();
+    await logout();
     navigate("/auth");
   };
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-primary/10 via-background to-accent/10">
@@ -91,10 +86,10 @@ const AdminDashboard = () => {
       </nav>
 
       <main className="max-w-7xl mx-auto p-6 space-y-6">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium">Total Pumps</CardTitle>
+              <CardTitle className="text-sm font-medium">Total Pumps / মোট পাম্প</CardTitle>
               <Droplet className="w-4 h-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
@@ -105,7 +100,7 @@ const AdminDashboard = () => {
 
           <Card>
             <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium">Total Users</CardTitle>
+              <CardTitle className="text-sm font-medium">Total Users / মোট ব্যবহারকারী</CardTitle>
               <Users className="w-4 h-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
@@ -113,39 +108,36 @@ const AdminDashboard = () => {
               <p className="text-xs text-muted-foreground mt-1">Registered pump operators</p>
             </CardContent>
           </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium">Total Farmers</CardTitle>
-              <Users className="w-4 h-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-3xl font-bold">{loading ? "..." : stats.farmers}</div>
-              <p className="text-xs text-muted-foreground mt-1">Registered farmers</p>
-            </CardContent>
-          </Card>
         </div>
 
         <Card>
           <CardHeader>
-            <CardTitle>Quick Actions</CardTitle>
+            <CardTitle>Quick Actions / দ্রুত কার্যক্রম</CardTitle>
           </CardHeader>
           <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <Button className="w-full justify-start" variant="outline" onClick={() => navigate("/admin/pumps")}>
               <Droplet className="w-4 h-4 mr-2" />
-              Manage Pumps
+              Manage Pumps / পাম্প পরিচালনা
+            </Button>
+            <Button className="w-full justify-start" variant="outline" onClick={() => navigate("/admin/pumps/create")}>
+              <Plus className="w-4 h-4 mr-2" />
+              Create New Pump / নতুন পাম্প তৈরি
             </Button>
             <Button className="w-full justify-start" variant="outline" onClick={() => navigate("/admin/users")}>
               <Users className="w-4 h-4 mr-2" />
-              Manage Users
+              Manage Users / ব্যবহারকারী পরিচালনা
+            </Button>
+            <Button className="w-full justify-start" variant="outline" onClick={() => navigate("/admin/users/create")}>
+              <Plus className="w-4 h-4 mr-2" />
+              Create New User / নতুন ব্যবহারকারী
             </Button>
             <Button className="w-full justify-start" variant="outline" onClick={() => navigate("/admin/farmers")}>
-              <Users className="w-4 h-4 mr-2" />
-              View All Farmers
+              <Building className="w-4 h-4 mr-2" />
+              View All Farmers / সকল কৃষক
             </Button>
             <Button className="w-full justify-start" variant="outline" onClick={() => navigate("/admin/settings")}>
               <Settings className="w-4 h-4 mr-2" />
-              System Settings
+              System Settings / সিস্টেম সেটিংস
             </Button>
           </CardContent>
         </Card>

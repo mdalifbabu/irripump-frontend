@@ -1,70 +1,28 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
-import { Droplet } from "lucide-react";
+import { useAuth } from "@/contexts/AuthContext";
+import { Droplet, Shield, User } from "lucide-react";
 
 const Auth = () => {
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [fullName, setFullName] = useState("");
   const [loading, setLoading] = useState(false);
+  const [adminCredentials, setAdminCredentials] = useState({ username: "", password: "" });
+  const [userCredentials, setUserCredentials] = useState({ username: "", password: "" });
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { adminLogin, userLogin } = useAuth();
 
-  useEffect(() => {
-    // Check if user is already logged in
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session) {
-        redirectBasedOnRole(session.user.id);
-      }
-    });
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session) {
-        redirectBasedOnRole(session.user.id);
-      }
-    });
-
-    return () => subscription.unsubscribe();
-  }, []);
-
-  const redirectBasedOnRole = async (userId: string) => {
-    try {
-      const { data: roles } = await supabase
-        .from("user_roles")
-        .select("role")
-        .eq("user_id", userId);
-
-      if (roles && roles.length > 0) {
-        const role = roles[0].role;
-        if (role === "admin") {
-          navigate("/admin/dashboard");
-        } else if (role === "user") {
-          navigate("/user/dashboard");
-        } else {
-          navigate("/");
-        }
-      } else {
-        navigate("/");
-      }
-    } catch (error) {
-      console.error("Error checking role:", error);
-      navigate("/");
-    }
-  };
-
-  const handleLogin = async (e: React.FormEvent) => {
+  const handleAdminLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!email || !password) {
+    if (!adminCredentials.username || !adminCredentials.password) {
       toast({
-        title: "Error",
-        description: "Please fill in all fields",
+        title: "ত্রুটি / Error",
+        description: "Please enter username and password",
         variant: "destructive",
       });
       return;
@@ -72,23 +30,16 @@ const Auth = () => {
 
     setLoading(true);
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
-
-      if (error) throw error;
-
-      if (data.user) {
-        toast({
-          title: "Success",
-          description: "Logged in successfully",
-        });
-      }
-    } catch (error: any) {
+      await adminLogin(adminCredentials.username, adminCredentials.password);
       toast({
-        title: "Login Failed",
-        description: error.message || "Invalid email or password",
+        title: "সফল / Success",
+        description: "Admin login successful!",
+      });
+      navigate("/admin/dashboard");
+    } catch (error) {
+      toast({
+        title: "ত্রুটি / Error",
+        description: error instanceof Error ? error.message : "Login failed",
         variant: "destructive",
       });
     } finally {
@@ -96,21 +47,12 @@ const Auth = () => {
     }
   };
 
-  const handleSignup = async (e: React.FormEvent) => {
+  const handleUserLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!email || !password || !fullName) {
+    if (!userCredentials.username || !userCredentials.password) {
       toast({
-        title: "Error",
-        description: "Please fill in all fields",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    if (password.length < 6) {
-      toast({
-        title: "Error",
-        description: "Password must be at least 6 characters",
+        title: "ত্রুটি / Error",
+        description: "Please enter username and password",
         variant: "destructive",
       });
       return;
@@ -118,29 +60,16 @@ const Auth = () => {
 
     setLoading(true);
     try {
-      const { data, error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          data: {
-            full_name: fullName,
-          },
-          emailRedirectTo: `${window.location.origin}/`,
-        },
-      });
-
-      if (error) throw error;
-
-      if (data.user) {
-        toast({
-          title: "Success",
-          description: "Account created successfully! Please check your email.",
-        });
-      }
-    } catch (error: any) {
+      await userLogin(userCredentials.username, userCredentials.password);
       toast({
-        title: "Signup Failed",
-        description: error.message || "Could not create account",
+        title: "সফল / Success",
+        description: "User login successful!",
+      });
+      navigate("/user/dashboard");
+    } catch (error) {
+      toast({
+        title: "ত্রুটি / Error",
+        description: error instanceof Error ? error.message : "Login failed",
         variant: "destructive",
       });
     } finally {
@@ -158,82 +87,87 @@ const Auth = () => {
           <CardTitle className="text-2xl font-bold">
             আলহাজ্ব ইয়াকুব আলী সেচ প্রকল্প
           </CardTitle>
-          <CardDescription>Alhaj Yeaqub Ali Irrigation Pump Management System</CardDescription>
+          <CardDescription className="text-base">
+            Irrigation Pump Management System
+          </CardDescription>
         </CardHeader>
         <CardContent>
-          <Tabs defaultValue="login" className="w-full">
+          <Tabs defaultValue="admin" className="w-full">
             <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="login">Login</TabsTrigger>
-              <TabsTrigger value="signup">Sign Up</TabsTrigger>
+              <TabsTrigger value="admin" className="flex items-center gap-2">
+                <Shield className="w-4 h-4" />
+                Admin
+              </TabsTrigger>
+              <TabsTrigger value="user" className="flex items-center gap-2">
+                <User className="w-4 h-4" />
+                Operator
+              </TabsTrigger>
             </TabsList>
-            
-            <TabsContent value="login">
-              <form onSubmit={handleLogin} className="space-y-4">
+
+            <TabsContent value="admin">
+              <form onSubmit={handleAdminLogin} className="space-y-4 mt-4">
                 <div className="space-y-2">
-                  <Label htmlFor="login-email">Email</Label>
+                  <Label htmlFor="admin-username">Username / ইউজারনেম</Label>
                   <Input
-                    id="login-email"
-                    type="email"
-                    placeholder="Enter your email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
+                    id="admin-username"
+                    type="text"
+                    placeholder="Enter admin username"
+                    value={adminCredentials.username}
+                    onChange={(e) =>
+                      setAdminCredentials({ ...adminCredentials, username: e.target.value })
+                    }
                     required
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="login-password">Password</Label>
+                  <Label htmlFor="admin-password">Password / পাসওয়ার্ড</Label>
                   <Input
-                    id="login-password"
+                    id="admin-password"
                     type="password"
-                    placeholder="Enter your password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="Enter password"
+                    value={adminCredentials.password}
+                    onChange={(e) =>
+                      setAdminCredentials({ ...adminCredentials, password: e.target.value })
+                    }
                     required
                   />
                 </div>
                 <Button type="submit" className="w-full" disabled={loading}>
-                  {loading ? "Logging in..." : "Login"}
+                  {loading ? "লগইন হচ্ছে..." : "Admin Login / এডমিন লগইন"}
                 </Button>
               </form>
             </TabsContent>
 
-            <TabsContent value="signup">
-              <form onSubmit={handleSignup} className="space-y-4">
+            <TabsContent value="user">
+              <form onSubmit={handleUserLogin} className="space-y-4 mt-4">
                 <div className="space-y-2">
-                  <Label htmlFor="signup-name">Full Name</Label>
+                  <Label htmlFor="user-username">Username / ইউজারনেম</Label>
                   <Input
-                    id="signup-name"
+                    id="user-username"
                     type="text"
-                    placeholder="Enter your full name"
-                    value={fullName}
-                    onChange={(e) => setFullName(e.target.value)}
+                    placeholder="Enter operator username"
+                    value={userCredentials.username}
+                    onChange={(e) =>
+                      setUserCredentials({ ...userCredentials, username: e.target.value })
+                    }
                     required
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="signup-email">Email</Label>
+                  <Label htmlFor="user-password">Password / পাসওয়ার্ড</Label>
                   <Input
-                    id="signup-email"
-                    type="email"
-                    placeholder="Enter your email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    required
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="signup-password">Password</Label>
-                  <Input
-                    id="signup-password"
+                    id="user-password"
                     type="password"
-                    placeholder="Create a password (min 6 characters)"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="Enter password"
+                    value={userCredentials.password}
+                    onChange={(e) =>
+                      setUserCredentials({ ...userCredentials, password: e.target.value })
+                    }
                     required
                   />
                 </div>
                 <Button type="submit" className="w-full" disabled={loading}>
-                  {loading ? "Creating account..." : "Sign Up"}
+                  {loading ? "লগইন হচ্ছে..." : "Operator Login / অপারেটর লগইন"}
                 </Button>
               </form>
             </TabsContent>
