@@ -16,7 +16,15 @@ import {
 } from "@/components/ui/form";
 import { useToast } from "@/hooks/use-toast";
 import { farmerApi } from "@/lib/api/client";
-import { Users, ArrowLeft, Loader2 } from "lucide-react";
+import { Loader2 } from "lucide-react";
+import AppNavbar from "@/components/AppNavbar";
+import PumpSelector from "@/components/PumpSelector";
+
+const userNavItems = [
+  { label: "ড্যাশবোর্ড", path: "/user/dashboard" },
+  { label: "কৃষক", path: "/user/farmers" },
+  { label: "ইউনিট মূল্য", path: "/user/unit-prices" },
+];
 
 const createFarmerSchema = z.object({
   nameBengali: z.string().min(1, "Bengali name is required").max(100),
@@ -93,22 +101,9 @@ const CreateFarmer = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-primary/10 via-background to-accent/10">
-      <nav className="bg-card border-b border-border px-6 py-4">
-        <div className="max-w-7xl mx-auto flex items-center gap-3">
-          <Button variant="ghost" size="icon" onClick={() => navigate("/user/farmers")}>
-            <ArrowLeft className="w-5 h-5" />
-          </Button>
-          <div className="w-10 h-10 bg-primary rounded-full flex items-center justify-center">
-            <Users className="w-6 h-6 text-primary-foreground" />
-          </div>
-          <div>
-            <h1 className="text-xl font-bold">Add New Farmer</h1>
-            <p className="text-sm text-muted-foreground">নতুন কৃষক যোগ করুন</p>
-          </div>
-        </div>
-      </nav>
+      <AppNavbar title="নতুন কৃষক" subtitle="Add New Farmer" navItems={userNavItems} rightContent={<PumpSelector />} />
 
-      <main className="max-w-2xl mx-auto p-6">
+      <main className="max-w-2xl mx-auto p-4 md:p-6">
         <Card>
           <CardHeader>
             <CardTitle>Farmer Information / কৃষক তথ্য</CardTitle>

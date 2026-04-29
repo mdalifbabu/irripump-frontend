@@ -23,7 +23,16 @@ import {
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { pumpApi } from "@/lib/api/client";
-import { Droplet, ArrowLeft, Loader2 } from "lucide-react";
+import { Loader2 } from "lucide-react";
+import AppNavbar from "@/components/AppNavbar";
+
+const adminNavItems = [
+  { label: "ড্যাশবোর্ড", path: "/admin/dashboard" },
+  { label: "পাম্প", path: "/admin/pumps" },
+  { label: "ব্যবহারকারী", path: "/admin/users" },
+  { label: "কৃষক", path: "/admin/farmers" },
+  { label: "সেটিংস", path: "/admin/settings" },
+];
 
 const createPumpSchema = z.object({
   pumpNameEnglish: z.string().min(1, "English name is required").max(100),
@@ -80,22 +89,9 @@ const CreatePump = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-primary/10 via-background to-accent/10">
-      <nav className="bg-card border-b border-border px-6 py-4">
-        <div className="max-w-7xl mx-auto flex items-center gap-3">
-          <Button variant="ghost" size="icon" onClick={() => navigate("/admin/pumps")}>
-            <ArrowLeft className="w-5 h-5" />
-          </Button>
-          <div className="w-10 h-10 bg-primary rounded-full flex items-center justify-center">
-            <Droplet className="w-6 h-6 text-primary-foreground" />
-          </div>
-          <div>
-            <h1 className="text-xl font-bold">Create New Pump</h1>
-            <p className="text-sm text-muted-foreground">নতুন পাম্প তৈরি করুন</p>
-          </div>
-        </div>
-      </nav>
+      <AppNavbar title="নতুন পাম্প" subtitle="Create New Pump" navItems={adminNavItems} />
 
-      <main className="max-w-2xl mx-auto p-6">
+      <main className="max-w-2xl mx-auto p-4 md:p-6">
         <Card>
           <CardHeader>
             <CardTitle>Pump Information / পাম্প তথ্য</CardTitle>

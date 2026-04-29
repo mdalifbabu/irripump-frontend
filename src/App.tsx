@@ -4,6 +4,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "@/contexts/AuthContext";
+import { PumpProvider } from "@/contexts/PumpContext";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import AdminDashboard from "./pages/AdminDashboard";
@@ -16,6 +17,8 @@ import PumpList from "./pages/admin/PumpList";
 import CreatePump from "./pages/admin/CreatePump";
 import UserList from "./pages/admin/UserList";
 import CreateUser from "./pages/admin/CreateUser";
+import AdminSettings from "./pages/admin/AdminSettings";
+import AdminFarmerList from "./pages/admin/AdminFarmerList";
 
 // User pages
 import FarmerList from "./pages/user/FarmerList";
@@ -30,11 +33,12 @@ const queryClient = new QueryClient();
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <AuthProvider>
-      <TooltipProvider>
-        <Toaster />
-        <Sonner />
-        <BrowserRouter>
-          <Routes>
+      <PumpProvider>
+        <TooltipProvider>
+          <Toaster />
+          <Sonner />
+          <BrowserRouter>
+            <Routes>
             <Route path="/" element={<Index />} />
             <Route path="/auth" element={<Auth />} />
             
@@ -44,6 +48,8 @@ const App = () => (
             <Route path="/admin/pumps/create" element={<CreatePump />} />
             <Route path="/admin/users" element={<UserList />} />
             <Route path="/admin/users/create" element={<CreateUser />} />
+            <Route path="/admin/settings" element={<AdminSettings />} />
+            <Route path="/admin/farmers" element={<AdminFarmerList />} />
             
             {/* User Routes */}
             <Route path="/user/dashboard" element={<UserDashboard />} />
@@ -57,11 +63,11 @@ const App = () => (
             {/* Farmer Portal */}
             <Route path="/farmer" element={<FarmerPortal />} />
             
-            {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
-          </Routes>
-        </BrowserRouter>
-      </TooltipProvider>
+            </Routes>
+          </BrowserRouter>
+        </TooltipProvider>
+      </PumpProvider>
     </AuthProvider>
   </QueryClientProvider>
 );

@@ -1,25 +1,25 @@
 import type {
   AuthResponse,
+  User,
+  Pump,
+  Farmer,
+  Land,
+  UnitPrice,
+  Payment,
+  DashboardStats,
+  Setting,
+  FarmerPortalData,
+  LoginRequest,
+  RefreshTokenRequest,
+  CreateUserRequest,
+  CreatePumpRequest,
   CreateFarmerRequest,
   CreateLandRequest,
-  CreatePaymentRequest,
-  CreatePumpRequest,
-  CreateSettingRequest,
   CreateUnitPriceRequest,
-  CreateUserRequest,
-  DashboardStats,
-  Farmer,
-  FarmerPortalData,
-  Land,
-  LoginRequest,
-  Payment,
-  Pump,
-  RefreshTokenRequest,
-  Setting,
-  UnitPrice,
+  CreatePaymentRequest,
   UpdatePaymentRequest,
-  User,
   VerifyFarmerCodeRequest,
+  CreateSettingRequest,
 } from "./types";
 
 const API_BASE_URL = "http://localhost:8081/api";
@@ -33,8 +33,7 @@ export const tokenManager = {
   getToken: (): string | null => localStorage.getItem(TOKEN_KEY),
   setToken: (token: string) => localStorage.setItem(TOKEN_KEY, token),
   getRefreshToken: (): string | null => localStorage.getItem(REFRESH_TOKEN_KEY),
-  setRefreshToken: (token: string) =>
-    localStorage.setItem(REFRESH_TOKEN_KEY, token),
+  setRefreshToken: (token: string) => localStorage.setItem(REFRESH_TOKEN_KEY, token),
   getUser: (): { userId: number; role: string } | null => {
     const user = localStorage.getItem(USER_KEY);
     return user ? JSON.parse(user) : null;
@@ -51,10 +50,10 @@ export const tokenManager = {
 // API client with error handling and token refresh
 async function apiRequest<T>(
   endpoint: string,
-  options: RequestInit = {},
+  options: RequestInit = {}
 ): Promise<T> {
   const token = tokenManager.getToken();
-
+  
   const headers: HeadersInit = {
     "Content-Type": "application/json",
     ...options.headers,
@@ -74,28 +73,24 @@ async function apiRequest<T>(
     const refreshToken = tokenManager.getRefreshToken();
     if (refreshToken) {
       try {
-        const refreshResponse = await fetch(
-          `${API_BASE_URL}/auth/refresh-token`,
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ refreshToken }),
-          },
-        );
+        const refreshResponse = await fetch(`${API_BASE_URL}/auth/refresh-token`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ refreshToken }),
+        });
 
         if (refreshResponse.ok) {
           const data: AuthResponse = await refreshResponse.json();
           tokenManager.setToken(`${data.type} ${data.accessToken}`);
           tokenManager.setRefreshToken(data.refreshToken);
-
+          
           // Retry original request
-          (headers as Record<string, string>)["Authorization"] =
-            `${data.type} ${data.accessToken}`;
+          (headers as Record<string, string>)["Authorization"] = `${data.type} ${data.accessToken}`;
           const retryResponse = await fetch(`${API_BASE_URL}${endpoint}`, {
             ...options,
             headers,
           });
-
+          
           if (!retryResponse.ok) {
             throw new Error(`API Error: ${retryResponse.status}`);
           }
@@ -120,7 +115,7 @@ async function apiRequest<T>(
   if (contentType && contentType.includes("application/json")) {
     return response.json();
   }
-
+  
   return {} as T;
 }
 
@@ -181,6 +176,21 @@ export const userApi = {
       method: "POST",
     });
   },
+
+  getAll: async (): Promise<User[]> => {
+    return apiRequest<User[]>("/admin/users");
+  },
+
+  update: async (userId: number, data: Partial<CreateUserRequest>): Promise<User> => {
+    return apiRequest<User>(`/admin/users/${userId}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    });
+  },
+
+  delete: async (userId: number): Promise<void> => {
+    return apiRequest<void>(`/admin/users/${userId}`, { method: "DELETE" });
+  },
 };
 
 // Pump API
@@ -193,20 +203,28 @@ export const pumpApi = {
   },
 
   getAll: async (): Promise<Pump[]> => {
-    return apiRequest<Pump[]>("/pump/pumps");
+    return apiRequest<Pump[]>("/admin/pumps");
   },
 
   getById: async (id: number): Promise<Pump> => {
     return apiRequest<Pump>(`/admin/pumps/${id}`);
   },
+
+  update: async (id: number, data: Partial<CreatePumpRequest>): Promise<Pump> => {
+    return apiRequest<Pump>(`/admin/pumps/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    });
+  },
+
+  delete: async (id: number): Promise<void> => {
+    return apiRequest<void>(`/admin/pumps/${id}`, { method: "DELETE" });
+  },
 };
 
 // Farmer API
 export const farmerApi = {
-  create: async (
-    pumpId: number,
-    data: CreateFarmerRequest,
-  ): Promise<Farmer> => {
+  create: async (pumpId: number, data: CreateFarmerRequest): Promise<Farmer> => {
     return apiRequest<Farmer>(`/farmers/pump/${pumpId}`, {
       method: "POST",
       body: JSON.stringify(data),
@@ -215,7 +233,7 @@ export const farmerApi = {
 
   search: async (pumpId: number, query: string): Promise<Farmer[]> => {
     return apiRequest<Farmer[]>(
-      `/farmers/pump/${pumpId}/search?query=${encodeURIComponent(query)}`,
+      `/farmers/pump/${pumpId}/search?query=${encodeURIComponent(query)}`
     );
   },
 
@@ -225,6 +243,17 @@ export const farmerApi = {
 
   getById: async (id: number): Promise<Farmer> => {
     return apiRequest<Farmer>(`/farmers/${id}`);
+  },
+
+  update: async (id: number, data: Partial<CreateFarmerRequest>): Promise<Farmer> => {
+    return apiRequest<Farmer>(`/farmers/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    });
+  },
+
+  delete: async (id: number): Promise<void> => {
+    return apiRequest<void>(`/farmers/${id}`, { method: "DELETE" });
   },
 };
 
@@ -240,14 +269,22 @@ export const landApi = {
   getByFarmer: async (farmerId: number): Promise<Land[]> => {
     return apiRequest<Land[]>(`/lands/farmer/${farmerId}`);
   },
+
+  update: async (id: number, data: Partial<CreateLandRequest>): Promise<Land> => {
+    return apiRequest<Land>(`/lands/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    });
+  },
+
+  delete: async (id: number): Promise<void> => {
+    return apiRequest<void>(`/lands/${id}`, { method: "DELETE" });
+  },
 };
 
 // Unit Price API
 export const unitPriceApi = {
-  create: async (
-    pumpId: number,
-    data: CreateUnitPriceRequest,
-  ): Promise<UnitPrice> => {
+  create: async (pumpId: number, data: CreateUnitPriceRequest): Promise<UnitPrice> => {
     return apiRequest<UnitPrice>(`/unit-prices/pump/${pumpId}`, {
       method: "POST",
       body: JSON.stringify(data),
@@ -257,24 +294,29 @@ export const unitPriceApi = {
   getByPump: async (pumpId: number): Promise<UnitPrice[]> => {
     return apiRequest<UnitPrice[]>(`/unit-prices/pump/${pumpId}`);
   },
+
+  update: async (id: number, data: Partial<CreateUnitPriceRequest>): Promise<UnitPrice> => {
+    return apiRequest<UnitPrice>(`/unit-prices/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    });
+  },
+
+  delete: async (id: number): Promise<void> => {
+    return apiRequest<void>(`/unit-prices/${id}`, { method: "DELETE" });
+  },
 };
 
 // Payment API
 export const paymentApi = {
-  create: async (
-    farmerId: number,
-    data: CreatePaymentRequest,
-  ): Promise<Payment> => {
+  create: async (farmerId: number, data: CreatePaymentRequest): Promise<Payment> => {
     return apiRequest<Payment>(`/payments/farmer/${farmerId}`, {
       method: "POST",
       body: JSON.stringify(data),
     });
   },
 
-  update: async (
-    paymentId: number,
-    data: UpdatePaymentRequest,
-  ): Promise<Payment> => {
+  update: async (paymentId: number, data: UpdatePaymentRequest): Promise<Payment> => {
     return apiRequest<Payment>(`/payments/${paymentId}/update`, {
       method: "PUT",
       body: JSON.stringify(data),
@@ -284,12 +326,18 @@ export const paymentApi = {
   getByFarmer: async (farmerId: number): Promise<Payment[]> => {
     return apiRequest<Payment[]>(`/payments/farmer/${farmerId}`);
   },
+
+  delete: async (paymentId: number): Promise<void> => {
+    return apiRequest<void>(`/payments/${paymentId}`, { method: "DELETE" });
+  },
 };
 
 // Dashboard API
 export const dashboardApi = {
   getStats: async (pumpId: number): Promise<DashboardStats> => {
-    return apiRequest<DashboardStats>(`/dashboard/pump/${pumpId}/stats`);
+    const currentYear = new Date().getFullYear();
+    const season =  "AMAN";
+    return apiRequest<DashboardStats>(`/dashboard/pump/${pumpId}/season/${season}/year/${currentYear}/stats`);
   },
 };
 
@@ -297,14 +345,11 @@ export const dashboardApi = {
 export const reportsApi = {
   downloadInvoice: async (farmerId: number): Promise<Blob> => {
     const token = tokenManager.getToken();
-    const response = await fetch(
-      `${API_BASE_URL}/reports/farmer/${farmerId}/invoice`,
-      {
-        headers: {
-          Authorization: token || "",
-        },
+    const response = await fetch(`${API_BASE_URL}/reports/farmer/${farmerId}/invoice`, {
+      headers: {
+        Authorization: token || "",
       },
-    );
+    });
     if (!response.ok) {
       throw new Error("Failed to download invoice");
     }
@@ -314,10 +359,7 @@ export const reportsApi = {
 
 // Settings API
 export const settingsApi = {
-  create: async (
-    pumpId: number,
-    data: CreateSettingRequest,
-  ): Promise<Setting> => {
+  create: async (pumpId: number, data: CreateSettingRequest): Promise<Setting> => {
     return apiRequest<Setting>(`/settings/pump/${pumpId}`, {
       method: "POST",
       body: JSON.stringify(data),
@@ -327,13 +369,22 @@ export const settingsApi = {
   getByPump: async (pumpId: number): Promise<Setting[]> => {
     return apiRequest<Setting[]>(`/settings/pump/${pumpId}`);
   },
+
+  update: async (id: number, data: Partial<CreateSettingRequest>): Promise<Setting> => {
+    return apiRequest<Setting>(`/settings/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    });
+  },
+
+  delete: async (id: number): Promise<void> => {
+    return apiRequest<void>(`/settings/${id}`, { method: "DELETE" });
+  },
 };
 
 // Farmer Portal API
 export const farmerPortalApi = {
-  verifyCode: async (
-    data: VerifyFarmerCodeRequest,
-  ): Promise<FarmerPortalData> => {
+  verifyCode: async (data: VerifyFarmerCodeRequest): Promise<FarmerPortalData> => {
     return apiRequest<FarmerPortalData>("/farmer-portal/verify-code", {
       method: "POST",
       body: JSON.stringify(data),

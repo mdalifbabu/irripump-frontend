@@ -6,46 +6,37 @@ import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from "@/components/ui/form";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Label } from "@/components/ui/label";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
+import { usePumpContext } from "@/contexts/PumpContext";
 import { farmerApi, landApi } from "@/lib/api/client";
 import type { Farmer, Land } from "@/lib/api/types";
-import { Map, ArrowLeft, Plus, Loader2 } from "lucide-react";
+import { Plus, Loader2, Pencil, Trash2 } from "lucide-react";
+import AppNavbar from "@/components/AppNavbar";
+import PumpSelector from "@/components/PumpSelector";
 
-const createLandSchema = z.object({
-  landIdentificationNumber: z.string().min(1, "Land ID is required"),
-  landmarkNumber: z.string().min(1, "Landmark number is required"),
-  sizeBigha: z.number().min(0.01, "Size must be greater than 0"),
-  sizeShatak: z.number().min(0, "Shatak cannot be negative"),
+const userNavItems = [
+  { label: "ড্যাশবোর্ড", path: "/user/dashboard" },
+  { label: "কৃষক", path: "/user/farmers" },
+  { label: "ইউনিট মূল্য", path: "/user/unit-prices" },
+];
+
+const schema = z.object({
+  landIdentificationNumber: z.string().min(1),
+  landmarkNumber: z.string().min(1),
+  sizeBigha: z.number().min(0.01),
+  sizeShatak: z.number().min(0),
   coordinates: z.string().optional(),
-  season: z.string().min(1, "Season is required"),
-  year: z.number().min(2000, "Year must be valid"),
+  season: z.string().min(1),
+  year: z.number().min(2000),
 });
-
-type CreateLandFormData = z.infer<typeof createLandSchema>;
+type FormData = z.infer<typeof schema>;
 
 const FarmerLands = () => {
   const { farmerId } = useParams<{ farmerId: string }>();
@@ -54,275 +45,116 @@ const FarmerLands = () => {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [showForm, setShowForm] = useState(false);
+  const [editing, setEditing] = useState<Land | null>(null);
+  const [deleting, setDeleting] = useState<Land | null>(null);
+  const [busy, setBusy] = useState(false);
   const navigate = useNavigate();
   const { toast } = useToast();
   const { isAuthenticated, isLoading } = useAuth();
+  const { season, year } = usePumpContext();
 
-  const currentYear = new Date().getFullYear();
-
-  const form = useForm<CreateLandFormData>({
-    resolver: zodResolver(createLandSchema),
-    defaultValues: {
-      landIdentificationNumber: "",
-      landmarkNumber: "",
-      sizeBigha: 0,
-      sizeShatak: 0,
-      coordinates: "",
-      season: "BORO",
-      year: currentYear,
-    },
+  const form = useForm<FormData>({
+    resolver: zodResolver(schema),
+    defaultValues: { landIdentificationNumber: "", landmarkNumber: "", sizeBigha: 0, sizeShatak: 0, coordinates: "", season, year },
   });
 
   useEffect(() => {
-    if (!isLoading && !isAuthenticated) {
-      navigate("/auth");
-      return;
-    }
-
-    if (!isLoading && isAuthenticated && farmerId) {
-      fetchData();
-    }
+    if (!isLoading && !isAuthenticated) { navigate("/auth"); return; }
+    if (!isLoading && isAuthenticated && farmerId) fetchData();
   }, [isLoading, isAuthenticated, farmerId, navigate]);
 
   const fetchData = async () => {
+    setLoading(true);
     try {
-      setLoading(true);
-      const [farmerData, landsData] = await Promise.all([
-        farmerApi.getById(parseInt(farmerId!)),
-        landApi.getByFarmer(parseInt(farmerId!)),
-      ]);
-      setFarmer(farmerData);
-      setLands(landsData);
-    } catch (error) {
-      console.error("Error fetching data:", error);
-      toast({
-        title: "Error",
-        description: "Failed to fetch farmer data",
-        variant: "destructive",
-      });
-    } finally {
-      setLoading(false);
-    }
+      const [f, l] = await Promise.all([farmerApi.getById(parseInt(farmerId!)), landApi.getByFarmer(parseInt(farmerId!))]);
+      setFarmer(f); setLands(l);
+    } catch { toast({ title: "Error", variant: "destructive" }); }
+    finally { setLoading(false); }
   };
 
-  const onSubmit = async (data: CreateLandFormData) => {
+  // Filter by season + year
+  const filtered = lands.filter((l) => l.season === season && l.year === year);
+
+  const onSubmit = async (data: FormData) => {
+    setSubmitting(true);
     try {
-      setSubmitting(true);
-      await landApi.create(parseInt(farmerId!), {
-        landIdentificationNumber: data.landIdentificationNumber,
-        landmarkNumber: data.landmarkNumber,
-        sizeBigha: data.sizeBigha,
-        sizeShatak: data.sizeShatak,
-        coordinates: data.coordinates || undefined,
-        season: data.season,
-        year: data.year,
+      await landApi.create(parseInt(farmerId!), { ...(data as Required<FormData>), coordinates: data.coordinates || undefined });
+      toast({ title: "জমি যোগ হয়েছে" });
+      form.reset({ landIdentificationNumber: "", landmarkNumber: "", sizeBigha: 0, sizeShatak: 0, coordinates: "", season, year });
+      setShowForm(false); fetchData();
+    } catch (e: any) { toast({ title: "Error", description: e.message, variant: "destructive" }); }
+    finally { setSubmitting(false); }
+  };
+
+  const handleUpdate = async () => {
+    if (!editing) return;
+    setBusy(true);
+    try {
+      await landApi.update(editing.id, {
+        landIdentificationNumber: editing.landIdentificationNumber,
+        landmarkNumber: editing.landmarkNumber,
+        sizeBigha: editing.sizeBigha,
+        sizeShatak: editing.sizeShatak,
+        coordinates: editing.coordinates,
+        season: editing.season,
+        year: editing.year,
       });
-      toast({
-        title: "Success",
-        description: "Land added successfully",
-      });
-      form.reset({
-        landIdentificationNumber: "",
-        landmarkNumber: "",
-        sizeBigha: 0,
-        sizeShatak: 0,
-        coordinates: "",
-        season: "BORO",
-        year: currentYear,
-      });
-      setShowForm(false);
-      fetchData();
-    } catch (error) {
-      console.error("Error creating land:", error);
-      toast({
-        title: "Error",
-        description: error instanceof Error ? error.message : "Failed to add land",
-        variant: "destructive",
-      });
-    } finally {
-      setSubmitting(false);
-    }
+      toast({ title: "আপডেট সফল" });
+      setEditing(null); fetchData();
+    } catch (e: any) { toast({ title: "Error", description: e.message, variant: "destructive" }); }
+    finally { setBusy(false); }
+  };
+
+  const handleDelete = async () => {
+    if (!deleting) return;
+    setBusy(true);
+    try {
+      await landApi.delete(deleting.id);
+      toast({ title: "মুছে ফেলা হয়েছে" });
+      setDeleting(null); fetchData();
+    } catch (e: any) { toast({ title: "Error", description: e.message, variant: "destructive" }); }
+    finally { setBusy(false); }
   };
 
   if (isLoading || loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
-      </div>
-    );
+    return <div className="min-h-screen flex items-center justify-center"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div></div>;
   }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-primary/10 via-background to-accent/10">
-      <nav className="bg-card border-b border-border px-6 py-4">
-        <div className="max-w-7xl mx-auto flex justify-between items-center">
-          <div className="flex items-center gap-3">
-            <Button variant="ghost" size="icon" onClick={() => navigate("/user/farmers")}>
-              <ArrowLeft className="w-5 h-5" />
-            </Button>
-            <div className="w-10 h-10 bg-primary rounded-full flex items-center justify-center">
-              <Map className="w-6 h-6 text-primary-foreground" />
-            </div>
-            <div>
-              <h1 className="text-xl font-bold">
-                {farmer?.nameBengali || "Farmer"} - Lands
-              </h1>
-              <p className="text-sm text-muted-foreground">
-                Code: {farmer?.farmerCode} | {farmer?.village}
-              </p>
-            </div>
+      <AppNavbar
+        title={`${farmer?.nameBengali || "কৃষক"} — জমি`}
+        subtitle={`${farmer?.farmerCode || ""} • ${season}/${year}`}
+        navItems={userNavItems}
+        rightContent={
+          <div className="flex flex-wrap gap-2 items-center">
+            <PumpSelector />
+            <Button size="sm" onClick={() => setShowForm(!showForm)}><Plus className="w-4 h-4 mr-1" />জমি</Button>
           </div>
-          <Button onClick={() => setShowForm(!showForm)}>
-            <Plus className="w-4 h-4 mr-2" />
-            Add Land
-          </Button>
-        </div>
-      </nav>
+        }
+      />
 
-      <main className="max-w-7xl mx-auto p-6 space-y-6">
+      <main className="max-w-7xl mx-auto p-4 md:p-6 space-y-6">
         {showForm && (
           <Card>
-            <CardHeader>
-              <CardTitle>Add New Land / নতুন জমি যোগ করুন</CardTitle>
-            </CardHeader>
+            <CardHeader><CardTitle>নতুন জমি যোগ করুন</CardTitle></CardHeader>
             <CardContent>
               <Form {...form}>
                 <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <FormField
-                      control={form.control}
-                      name="landIdentificationNumber"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Land ID Number / জমি শনাক্ত নম্বর</FormLabel>
-                          <FormControl>
-                            <Input placeholder="Enter land ID" {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    <FormField
-                      control={form.control}
-                      name="landmarkNumber"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Landmark Number / দাগ নম্বর</FormLabel>
-                          <FormControl>
-                            <Input placeholder="Enter landmark number" {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
+                    <FormField control={form.control} name="landIdentificationNumber" render={({ field }) => (<FormItem><FormLabel>জমি ID</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} />
+                    <FormField control={form.control} name="landmarkNumber" render={({ field }) => (<FormItem><FormLabel>দাগ নম্বর</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} />
                   </div>
-
                   <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                    <FormField
-                      control={form.control}
-                      name="sizeBigha"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Size (Bigha) / বিঘা</FormLabel>
-                          <FormControl>
-                            <Input
-                              type="number"
-                              step="0.01"
-                              placeholder="0.00"
-                              {...field}
-                              onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    <FormField
-                      control={form.control}
-                      name="sizeShatak"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Size (Shatak) / শতক</FormLabel>
-                          <FormControl>
-                            <Input
-                              type="number"
-                              step="0.01"
-                              placeholder="0.00"
-                              {...field}
-                              onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    <FormField
-                      control={form.control}
-                      name="season"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Season / মৌসুম</FormLabel>
-                          <Select onValueChange={field.onChange} defaultValue={field.value}>
-                            <FormControl>
-                              <SelectTrigger>
-                                <SelectValue />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              <SelectItem value="BORO">Boro / বোরো</SelectItem>
-                              <SelectItem value="AMAN">Aman / আমন</SelectItem>
-                              <SelectItem value="AUS">Aus / আউশ</SelectItem>
-                            </SelectContent>
-                          </Select>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    <FormField
-                      control={form.control}
-                      name="year"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Year / বছর</FormLabel>
-                          <FormControl>
-                            <Input
-                              type="number"
-                              {...field}
-                              onChange={(e) => field.onChange(parseInt(e.target.value) || currentYear)}
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
+                    <FormField control={form.control} name="sizeBigha" render={({ field }) => (<FormItem><FormLabel>বিঘা</FormLabel><FormControl><Input type="number" step="0.01" {...field} onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)} /></FormControl><FormMessage /></FormItem>)} />
+                    <FormField control={form.control} name="sizeShatak" render={({ field }) => (<FormItem><FormLabel>শতক</FormLabel><FormControl><Input type="number" step="0.01" {...field} onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)} /></FormControl><FormMessage /></FormItem>)} />
+                    <FormField control={form.control} name="season" render={({ field }) => (<FormItem><FormLabel>মৌসুম</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl><SelectContent><SelectItem value="BORO">বোরো</SelectItem><SelectItem value="AMAN">আমন</SelectItem><SelectItem value="AUS">আউশ</SelectItem></SelectContent></Select><FormMessage /></FormItem>)} />
+                    <FormField control={form.control} name="year" render={({ field }) => (<FormItem><FormLabel>বছর</FormLabel><FormControl><Input type="number" {...field} onChange={(e) => field.onChange(parseInt(e.target.value) || year)} /></FormControl><FormMessage /></FormItem>)} />
                   </div>
-
-                  <FormField
-                    control={form.control}
-                    name="coordinates"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Coordinates (Optional) / স্থানাঙ্ক</FormLabel>
-                        <FormControl>
-                          <Input placeholder="e.g., 23.8103, 90.4125" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
+                  <FormField control={form.control} name="coordinates" render={({ field }) => (<FormItem><FormLabel>স্থানাঙ্ক (Optional)</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} />
                   <div className="flex gap-2 justify-end">
-                    <Button type="button" variant="outline" onClick={() => setShowForm(false)}>
-                      Cancel
-                    </Button>
-                    <Button type="submit" disabled={submitting}>
-                      {submitting && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-                      Add Land
-                    </Button>
+                    <Button type="button" variant="outline" onClick={() => setShowForm(false)}>বাতিল</Button>
+                    <Button type="submit" disabled={submitting}>{submitting && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}সংরক্ষণ</Button>
                   </div>
                 </form>
               </Form>
@@ -331,43 +163,87 @@ const FarmerLands = () => {
         )}
 
         <Card>
-          <CardHeader>
-            <CardTitle>Land Records / জমির তালিকা</CardTitle>
-          </CardHeader>
+          <CardHeader><CardTitle>জমির তালিকা ({filtered.length})</CardTitle></CardHeader>
           <CardContent>
-            {lands.length === 0 ? (
-              <div className="text-center py-8 text-muted-foreground">
-                No lands registered yet.
-              </div>
+            {filtered.length === 0 ? (
+              <div className="text-center py-8 text-muted-foreground">এই মৌসুম/বছরের জন্য কোনো জমি নেই।</div>
             ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Land ID</TableHead>
-                    <TableHead>Landmark No.</TableHead>
-                    <TableHead>Size (Bigha)</TableHead>
-                    <TableHead>Size (Shatak)</TableHead>
-                    <TableHead>Season</TableHead>
-                    <TableHead>Year</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {lands.map((land) => (
-                    <TableRow key={land.id}>
-                      <TableCell className="font-mono">{land.landIdentificationNumber}</TableCell>
-                      <TableCell>{land.landmarkNumber}</TableCell>
-                      <TableCell className="font-bold">{land.sizeBigha}</TableCell>
-                      <TableCell>{land.sizeShatak}</TableCell>
-                      <TableCell>{land.season}</TableCell>
-                      <TableCell>{land.year}</TableCell>
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Land ID</TableHead>
+                      <TableHead className="hidden md:table-cell">দাগ নম্বর</TableHead>
+                      <TableHead>বিঘা</TableHead>
+                      <TableHead className="hidden md:table-cell">শতক</TableHead>
+                      <TableHead className="hidden md:table-cell">মৌসুম</TableHead>
+                      <TableHead className="hidden md:table-cell">বছর</TableHead>
+                      <TableHead>অ্যাকশন</TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                  </TableHeader>
+                  <TableBody>
+                    {filtered.map((l) => (
+                      <TableRow key={l.id}>
+                        <TableCell className="font-mono">{l.landIdentificationNumber}</TableCell>
+                        <TableCell className="hidden md:table-cell">{l.landmarkNumber}</TableCell>
+                        <TableCell className="font-bold">{l.sizeBigha}</TableCell>
+                        <TableCell className="hidden md:table-cell">{l.sizeShatak}</TableCell>
+                        <TableCell className="hidden md:table-cell">{l.season}</TableCell>
+                        <TableCell className="hidden md:table-cell">{l.year}</TableCell>
+                        <TableCell>
+                          <div className="flex gap-1">
+                            <Button size="icon" variant="outline" className="h-8 w-8" onClick={() => setEditing({ ...l })}><Pencil className="w-3.5 h-3.5" /></Button>
+                            <Button size="icon" variant="outline" className="h-8 w-8 text-destructive" onClick={() => setDeleting(l)}><Trash2 className="w-3.5 h-3.5" /></Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
             )}
           </CardContent>
         </Card>
       </main>
+
+      <Dialog open={!!editing} onOpenChange={(o) => !o && setEditing(null)}>
+        <DialogContent className="max-h-[90vh] overflow-y-auto">
+          <DialogHeader><DialogTitle>জমি সম্পাদনা</DialogTitle></DialogHeader>
+          {editing && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div><Label>Land ID</Label><Input value={editing.landIdentificationNumber} onChange={(e) => setEditing({ ...editing, landIdentificationNumber: e.target.value })} /></div>
+              <div><Label>দাগ নম্বর</Label><Input value={editing.landmarkNumber} onChange={(e) => setEditing({ ...editing, landmarkNumber: e.target.value })} /></div>
+              <div><Label>বিঘা</Label><Input type="number" step="0.01" value={editing.sizeBigha} onChange={(e) => setEditing({ ...editing, sizeBigha: parseFloat(e.target.value) || 0 })} /></div>
+              <div><Label>শতক</Label><Input type="number" step="0.01" value={editing.sizeShatak} onChange={(e) => setEditing({ ...editing, sizeShatak: parseFloat(e.target.value) || 0 })} /></div>
+              <div><Label>মৌসুম</Label>
+                <Select value={editing.season} onValueChange={(v) => setEditing({ ...editing, season: v })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent><SelectItem value="BORO">BORO</SelectItem><SelectItem value="AMAN">AMAN</SelectItem><SelectItem value="AUS">AUS</SelectItem></SelectContent>
+                </Select>
+              </div>
+              <div><Label>বছর</Label><Input type="number" value={editing.year} onChange={(e) => setEditing({ ...editing, year: parseInt(e.target.value) || year })} /></div>
+              <div className="md:col-span-2"><Label>স্থানাঙ্ক</Label><Input value={editing.coordinates || ""} onChange={(e) => setEditing({ ...editing, coordinates: e.target.value })} /></div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditing(null)}>বাতিল</Button>
+            <Button onClick={handleUpdate} disabled={busy}>{busy && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}সংরক্ষণ</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog open={!!deleting} onOpenChange={(o) => !o && setDeleting(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>জমি মুছতে চান?</AlertDialogTitle>
+            <AlertDialogDescription>{deleting?.landIdentificationNumber} মুছে যাবে।</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>বাতিল</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDelete} disabled={busy} className="bg-destructive text-destructive-foreground">মুছুন</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };

@@ -6,323 +6,157 @@ import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from "@/components/ui/form";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Label } from "@/components/ui/label";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
-import { unitPriceApi, pumpApi } from "@/lib/api/client";
-import type { UnitPrice, Pump } from "@/lib/api/types";
-import { DollarSign, ArrowLeft, Plus, Loader2 } from "lucide-react";
+import { usePumpContext } from "@/contexts/PumpContext";
+import { unitPriceApi } from "@/lib/api/client";
+import type { UnitPrice } from "@/lib/api/types";
+import { Plus, Loader2, Pencil, Trash2 } from "lucide-react";
+import AppNavbar from "@/components/AppNavbar";
+import PumpSelector from "@/components/PumpSelector";
 
-const createUnitPriceSchema = z.object({
-  pricePerBigha: z.number().min(1, "Price must be greater than 0"),
-  season: z.string().min(1, "Season is required"),
-  year: z.number().min(2000, "Year must be valid"),
-  effectiveFrom: z.string().min(1, "Effective from date is required"),
-  effectiveTo: z.string().min(1, "Effective to date is required"),
+const userNavItems = [
+  { label: "ড্যাশবোর্ড", path: "/user/dashboard" },
+  { label: "কৃষক", path: "/user/farmers" },
+  { label: "ইউনিট মূল্য", path: "/user/unit-prices" },
+];
+
+const schema = z.object({
+  pricePerBigha: z.number().min(1, "Price must be > 0"),
+  season: z.string().min(1),
+  year: z.number().min(2000),
+  effectiveFrom: z.string().min(1),
+  effectiveTo: z.string().min(1),
 });
-
-type CreateUnitPriceFormData = z.infer<typeof createUnitPriceSchema>;
+type FormData = z.infer<typeof schema>;
 
 const UnitPriceList = () => {
   const [prices, setPrices] = useState<UnitPrice[]>([]);
-  const [pumps, setPumps] = useState<Pump[]>([]);
-  const [selectedPumpId, setSelectedPumpId] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
-  const [loadingPumps, setLoadingPumps] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [showForm, setShowForm] = useState(false);
+  const [editing, setEditing] = useState<UnitPrice | null>(null);
+  const [deleting, setDeleting] = useState<UnitPrice | null>(null);
+  const [busy, setBusy] = useState(false);
   const navigate = useNavigate();
   const { toast } = useToast();
   const { isAuthenticated, isLoading } = useAuth();
+  const { pumpId, season, year } = usePumpContext();
 
-  const currentYear = new Date().getFullYear();
-
-  const form = useForm<CreateUnitPriceFormData>({
-    resolver: zodResolver(createUnitPriceSchema),
+  const form = useForm<FormData>({
+    resolver: zodResolver(schema),
     defaultValues: {
       pricePerBigha: 0,
-      season: "BORO",
-      year: currentYear,
+      season,
+      year,
       effectiveFrom: new Date().toISOString().split("T")[0],
       effectiveTo: "",
     },
   });
 
   useEffect(() => {
-    if (!isLoading && !isAuthenticated) {
-      navigate("/auth");
-      return;
-    }
-
-    if (!isLoading && isAuthenticated) {
-      fetchPumps();
-    }
+    if (!isLoading && !isAuthenticated) navigate("/auth");
   }, [isLoading, isAuthenticated, navigate]);
 
-  const fetchPumps = async () => {
-    try {
-      const data = await pumpApi.getAll();
-      setPumps(data);
-      if (data.length > 0) {
-        setSelectedPumpId(data[0].id);
-      }
-    } catch (error) {
-      console.error("Error fetching pumps:", error);
-      toast({
-        title: "Error",
-        description: "Failed to fetch pumps",
-        variant: "destructive",
-      });
-    } finally {
-      setLoadingPumps(false);
-    }
-  };
+  useEffect(() => { if (pumpId) fetchPrices(); }, [pumpId]);
 
-  useEffect(() => {
-    if (selectedPumpId) {
-      fetchPrices();
-    }
-  }, [selectedPumpId]);
+  // Filter by season/year from context (in addition to backend pump filter)
+  console.log("Filtering prices for", { season, year }, "from", prices);
+  const filtered = prices.filter((p) => p.season.toLocaleUpperCase() === season && p.year === year);
 
   const fetchPrices = async () => {
-    if (!selectedPumpId) return;
-    try {
-      setLoading(true);
-      const data = await unitPriceApi.getByPump(selectedPumpId);
-      setPrices(data);
-    } catch (error) {
-      console.error("Error fetching prices:", error);
-      toast({
-        title: "Error",
-        description: "Failed to fetch unit prices",
-        variant: "destructive",
-      });
-    } finally {
-      setLoading(false);
-    }
+    if (!pumpId) return;
+    setLoading(true);
+    try { setPrices(await unitPriceApi.getByPump(pumpId)); }
+    catch { toast({ title: "Error", description: "Failed to fetch unit prices", variant: "destructive" }); }
+    finally { setLoading(false); }
   };
 
-  const onSubmit = async (data: CreateUnitPriceFormData) => {
-    if (!selectedPumpId) return;
+  const onSubmit = async (data: FormData) => {
+    if (!pumpId) return;
+    setSubmitting(true);
     try {
-      setSubmitting(true);
-      await unitPriceApi.create(selectedPumpId, {
-        pricePerBigha: data.pricePerBigha,
-        season: data.season,
-        year: data.year,
-        effectiveFrom: data.effectiveFrom,
-        effectiveTo: data.effectiveTo,
-      });
-      toast({
-        title: "Success",
-        description: "Unit price created successfully",
-      });
-      form.reset({
-        pricePerBigha: 0,
-        season: "BORO",
-        year: currentYear,
-        effectiveFrom: new Date().toISOString().split("T")[0],
-        effectiveTo: "",
-      });
-      setShowForm(false);
-      fetchPrices();
-    } catch (error) {
-      console.error("Error creating unit price:", error);
-      toast({
-        title: "Error",
-        description: error instanceof Error ? error.message : "Failed to create unit price",
-        variant: "destructive",
-      });
-    } finally {
-      setSubmitting(false);
-    }
+      await unitPriceApi.create(pumpId, data as Required<FormData>);
+      toast({ title: "Success", description: "Unit price created" });
+      form.reset({ pricePerBigha: 0, season, year, effectiveFrom: new Date().toISOString().split("T")[0], effectiveTo: "" });
+      setShowForm(false); fetchPrices();
+    } catch (e: any) {
+      toast({ title: "Error", description: e.message, variant: "destructive" });
+    } finally { setSubmitting(false); }
   };
 
-  if (isLoading || loadingPumps) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
-      </div>
-    );
+  const handleUpdate = async () => {
+    if (!editing) return;
+    setBusy(true);
+    try {
+      await unitPriceApi.update(editing.id, {
+        pricePerBigha: editing.pricePerBigha,
+        season: editing.season,
+        year: editing.year,
+        effectiveFrom: editing.effectiveFrom,
+        effectiveTo: editing.effectiveTo,
+      });
+      toast({ title: "আপডেট সফল" });
+      setEditing(null); fetchPrices();
+    } catch (e: any) { toast({ title: "Error", description: e.message, variant: "destructive" }); }
+    finally { setBusy(false); }
+  };
+
+  const handleDelete = async () => {
+    if (!deleting) return;
+    setBusy(true);
+    try {
+      await unitPriceApi.delete(deleting.id);
+      toast({ title: "মুছে ফেলা হয়েছে" });
+      setDeleting(null); fetchPrices();
+    } catch (e: any) { toast({ title: "Error", description: e.message, variant: "destructive" }); }
+    finally { setBusy(false); }
+  };
+
+  if (isLoading) {
+    return <div className="min-h-screen flex items-center justify-center"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div></div>;
   }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-primary/10 via-background to-accent/10">
-      <nav className="bg-card border-b border-border px-6 py-4">
-        <div className="max-w-7xl mx-auto flex justify-between items-center">
-          <div className="flex items-center gap-3">
-            <Button variant="ghost" size="icon" onClick={() => navigate("/user/dashboard")}>
-              <ArrowLeft className="w-5 h-5" />
-            </Button>
-            <div className="w-10 h-10 bg-primary rounded-full flex items-center justify-center">
-              <DollarSign className="w-6 h-6 text-primary-foreground" />
-            </div>
-            <div>
-              <h1 className="text-xl font-bold">Unit Prices</h1>
-              <p className="text-sm text-muted-foreground">একক মূল্য পরিচালনা</p>
-            </div>
+      <AppNavbar
+        title="ইউনিট মূল্য"
+        subtitle="Unit Prices"
+        navItems={userNavItems}
+        rightContent={
+          <div className="flex flex-wrap gap-2 items-center">
+            <PumpSelector />
+            <Button size="sm" onClick={() => setShowForm(!showForm)}><Plus className="w-4 h-4 mr-1" />নতুন</Button>
           </div>
-          <Button onClick={() => setShowForm(!showForm)}>
-            <Plus className="w-4 h-4 mr-2" />
-            Add Price
-          </Button>
-        </div>
-      </nav>
+        }
+      />
 
-      <main className="max-w-7xl mx-auto p-6 space-y-6">
-        <Card>
-          <CardContent className="pt-6">
-            <div className="w-full md:w-64">
-              <Select
-                value={selectedPumpId?.toString() || ""}
-                onValueChange={(value) => setSelectedPumpId(parseInt(value))}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select Pump" />
-                </SelectTrigger>
-                <SelectContent>
-                  {pumps.map((pump) => (
-                    <SelectItem key={pump.id} value={pump.id.toString()}>
-                      {pump.pumpNameEnglish}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </CardContent>
-        </Card>
-
+      <main className="max-w-7xl mx-auto p-4 md:p-6 space-y-6">
         {showForm && (
           <Card>
-            <CardHeader>
-              <CardTitle>Add New Unit Price / নতুন একক মূল্য</CardTitle>
-            </CardHeader>
+            <CardHeader><CardTitle>নতুন একক মূল্য</CardTitle></CardHeader>
             <CardContent>
               <Form {...form}>
                 <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <FormField
-                      control={form.control}
-                      name="pricePerBigha"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Price per Bigha (৳)</FormLabel>
-                          <FormControl>
-                            <Input
-                              type="number"
-                              placeholder="Enter price"
-                              {...field}
-                              onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    <FormField
-                      control={form.control}
-                      name="season"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Season / মৌসুম</FormLabel>
-                          <Select onValueChange={field.onChange} defaultValue={field.value}>
-                            <FormControl>
-                              <SelectTrigger>
-                                <SelectValue />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              <SelectItem value="BORO">Boro / বোরো</SelectItem>
-                              <SelectItem value="AMAN">Aman / আমন</SelectItem>
-                              <SelectItem value="AUS">Aus / আউশ</SelectItem>
-                            </SelectContent>
-                          </Select>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    <FormField
-                      control={form.control}
-                      name="year"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Year / বছর</FormLabel>
-                          <FormControl>
-                            <Input
-                              type="number"
-                              {...field}
-                              onChange={(e) => field.onChange(parseInt(e.target.value) || currentYear)}
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
+                    <FormField control={form.control} name="pricePerBigha" render={({ field }) => (<FormItem><FormLabel>মূল্য / Bigha (৳)</FormLabel><FormControl><Input type="number" {...field} onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)} /></FormControl><FormMessage /></FormItem>)} />
+                    <FormField control={form.control} name="season" render={({ field }) => (<FormItem><FormLabel>মৌসুম</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl><SelectContent><SelectItem value="BORO">বোরো</SelectItem><SelectItem value="AMAN">আমন</SelectItem><SelectItem value="AUS">আউশ</SelectItem></SelectContent></Select><FormMessage /></FormItem>)} />
+                    <FormField control={form.control} name="year" render={({ field }) => (<FormItem><FormLabel>বছর</FormLabel><FormControl><Input type="number" {...field} onChange={(e) => field.onChange(parseInt(e.target.value) || year)} /></FormControl><FormMessage /></FormItem>)} />
                   </div>
-
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <FormField
-                      control={form.control}
-                      name="effectiveFrom"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Effective From / কার্যকর শুরু</FormLabel>
-                          <FormControl>
-                            <Input type="date" {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    <FormField
-                      control={form.control}
-                      name="effectiveTo"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Effective To / কার্যকর শেষ</FormLabel>
-                          <FormControl>
-                            <Input type="date" {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
+                    <FormField control={form.control} name="effectiveFrom" render={({ field }) => (<FormItem><FormLabel>কার্যকর শুরু</FormLabel><FormControl><Input type="date" {...field} /></FormControl><FormMessage /></FormItem>)} />
+                    <FormField control={form.control} name="effectiveTo" render={({ field }) => (<FormItem><FormLabel>কার্যকর শেষ</FormLabel><FormControl><Input type="date" {...field} /></FormControl><FormMessage /></FormItem>)} />
                   </div>
-
                   <div className="flex gap-2 justify-end">
-                    <Button type="button" variant="outline" onClick={() => setShowForm(false)}>
-                      Cancel
-                    </Button>
-                    <Button type="submit" disabled={submitting}>
-                      {submitting && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-                      Add Price
-                    </Button>
+                    <Button type="button" variant="outline" onClick={() => setShowForm(false)}>বাতিল</Button>
+                    <Button type="submit" disabled={submitting}>{submitting && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}সংরক্ষণ</Button>
                   </div>
                 </form>
               </Form>
@@ -331,47 +165,86 @@ const UnitPriceList = () => {
         )}
 
         <Card>
-          <CardHeader>
-            <CardTitle>Unit Prices / একক মূল্য তালিকা</CardTitle>
-          </CardHeader>
+          <CardHeader><CardTitle>ইউনিট মূল্য তালিকা — {season} / {year} ({filtered.length})</CardTitle></CardHeader>
           <CardContent>
             {loading ? (
-              <div className="flex justify-center py-8">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-              </div>
-            ) : prices.length === 0 ? (
-              <div className="text-center py-8 text-muted-foreground">
-                No unit prices configured yet.
-              </div>
+              <div className="flex justify-center py-8"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div></div>
+            ) : filtered.length === 0 ? (
+              <div className="text-center py-8 text-muted-foreground">এই মৌসুম/বছরের জন্য কোনো মূল্য নেই।</div>
             ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Season</TableHead>
-                    <TableHead>Year</TableHead>
-                    <TableHead>Price per Bigha</TableHead>
-                    <TableHead>Effective From</TableHead>
-                    <TableHead>Effective To</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {prices.map((price) => (
-                    <TableRow key={price.id}>
-                      <TableCell>
-                        <Badge variant="outline">{price.season}</Badge>
-                      </TableCell>
-                      <TableCell>{price.year}</TableCell>
-                      <TableCell className="font-bold">৳{price.pricePerBigha.toLocaleString()}</TableCell>
-                      <TableCell>{price.effectiveFrom}</TableCell>
-                      <TableCell>{price.effectiveTo}</TableCell>
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>মৌসুম</TableHead>
+                      <TableHead>বছর</TableHead>
+                      <TableHead>মূল্য / Bigha</TableHead>
+                      <TableHead className="hidden md:table-cell">শুরু</TableHead>
+                      <TableHead className="hidden md:table-cell">শেষ</TableHead>
+                      <TableHead>অ্যাকশন</TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                  </TableHeader>
+                  <TableBody>
+                    {filtered.map((p) => (
+                      <TableRow key={p.id}>
+                        <TableCell><Badge variant="outline">{p.season}</Badge></TableCell>
+                        <TableCell>{p.year}</TableCell>
+                        <TableCell className="font-bold">৳{p.pricePerBigha.toLocaleString()}</TableCell>
+                        <TableCell className="hidden md:table-cell">{p.effectiveFrom}</TableCell>
+                        <TableCell className="hidden md:table-cell">{p.effectiveTo}</TableCell>
+                        <TableCell>
+                          <div className="flex gap-1">
+                            <Button size="icon" variant="outline" className="h-8 w-8" onClick={() => setEditing({ ...p })}><Pencil className="w-3.5 h-3.5" /></Button>
+                            <Button size="icon" variant="outline" className="h-8 w-8 text-destructive" onClick={() => setDeleting(p)}><Trash2 className="w-3.5 h-3.5" /></Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
             )}
           </CardContent>
         </Card>
       </main>
+
+      <Dialog open={!!editing} onOpenChange={(o) => !o && setEditing(null)}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>মূল্য সম্পাদনা</DialogTitle></DialogHeader>
+          {editing && (
+            <div className="space-y-3">
+              <div><Label>মূল্য / Bigha</Label><Input type="number" value={editing.pricePerBigha} onChange={(e) => setEditing({ ...editing, pricePerBigha: parseFloat(e.target.value) || 0 })} /></div>
+              <div>
+                <Label>মৌসুম</Label>
+                <Select value={editing.season} onValueChange={(v) => setEditing({ ...editing, season: v })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent><SelectItem value="BORO">BORO</SelectItem><SelectItem value="AMAN">AMAN</SelectItem><SelectItem value="AUS">AUS</SelectItem></SelectContent>
+                </Select>
+              </div>
+              <div><Label>বছর</Label><Input type="number" value={editing.year} onChange={(e) => setEditing({ ...editing, year: parseInt(e.target.value) || year })} /></div>
+              <div><Label>কার্যকর শুরু</Label><Input type="date" value={editing.effectiveFrom} onChange={(e) => setEditing({ ...editing, effectiveFrom: e.target.value })} /></div>
+              <div><Label>কার্যকর শেষ</Label><Input type="date" value={editing.effectiveTo} onChange={(e) => setEditing({ ...editing, effectiveTo: e.target.value })} /></div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditing(null)}>বাতিল</Button>
+            <Button onClick={handleUpdate} disabled={busy}>{busy && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}সংরক্ষণ</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog open={!!deleting} onOpenChange={(o) => !o && setDeleting(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>মূল্য মুছতে চান?</AlertDialogTitle>
+            <AlertDialogDescription>{deleting?.season} / {deleting?.year} — ৳{deleting?.pricePerBigha} মুছে যাবে।</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>বাতিল</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDelete} disabled={busy} className="bg-destructive text-destructive-foreground">মুছুন</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };

@@ -3,249 +3,206 @@ import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Badge } from "@/components/ui/badge";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
-import { farmerApi, pumpApi } from "@/lib/api/client";
-import type { Farmer, Pump } from "@/lib/api/types";
-import { Users, Plus, ArrowLeft, Search, RefreshCw } from "lucide-react";
+import { usePumpContext } from "@/contexts/PumpContext";
+import { farmerApi, paymentApi, landApi, unitPriceApi } from "@/lib/api/client";
+import type { Farmer } from "@/lib/api/types";
+import { Plus, Search, RefreshCw, Trash2 } from "lucide-react";
+import AppNavbar from "@/components/AppNavbar";
+import PumpSelector from "@/components/PumpSelector";
+
+const userNavItems = [
+  { label: "ড্যাশবোর্ড", path: "/user/dashboard" },
+  { label: "কৃষক", path: "/user/farmers" },
+  { label: "ইউনিট মূল্য", path: "/user/unit-prices" },
+];
+
+interface FarmerWithDue extends Farmer { pendingAmount?: number; }
 
 const FarmerList = () => {
-  const [farmers, setFarmers] = useState<Farmer[]>([]);
-  const [pumps, setPumps] = useState<Pump[]>([]);
-  const [selectedPumpId, setSelectedPumpId] = useState<number | null>(null);
+  const [farmers, setFarmers] = useState<FarmerWithDue[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [loading, setLoading] = useState(false);
-  const [loadingPumps, setLoadingPumps] = useState(true);
+  const [deleting, setDeleting] = useState<Farmer | null>(null);
+  const [busy, setBusy] = useState(false);
   const navigate = useNavigate();
   const { toast } = useToast();
   const { isAuthenticated, isLoading } = useAuth();
+  const { pumpId } = usePumpContext();
 
   useEffect(() => {
-    if (!isLoading && !isAuthenticated) {
-      navigate("/auth");
-      return;
-    }
-
-    if (!isLoading && isAuthenticated) {
-      fetchPumps();
-    }
+    if (!isLoading && !isAuthenticated) navigate("/auth");
   }, [isLoading, isAuthenticated, navigate]);
 
-  const fetchPumps = async () => {
-    try {
-      const data = await pumpApi.getAll();
-      setPumps(data);
-      if (data.length > 0) {
-        setSelectedPumpId(data[0].id);
-      }
-    } catch (error) {
-      console.error("Error fetching pumps:", error);
-      toast({
-        title: "Error",
-        description: "Failed to fetch pumps",
-        variant: "destructive",
-      });
-    } finally {
-      setLoadingPumps(false);
-    }
-  };
-
-  useEffect(() => {
-    if (selectedPumpId) {
-      fetchFarmers();
-    }
-  }, [selectedPumpId]);
+  useEffect(() => { if (pumpId) fetchFarmers(); }, [pumpId]);
 
   const fetchFarmers = async () => {
-    if (!selectedPumpId) return;
+    if (!pumpId) return;
+    setLoading(true);
     try {
-      setLoading(true);
-      const data = await farmerApi.getByPump(selectedPumpId);
-      setFarmers(data);
-    } catch (error) {
-      console.error("Error fetching farmers:", error);
-      toast({
-        title: "Error",
-        description: "Failed to fetch farmers",
-        variant: "destructive",
-      });
-    } finally {
-      setLoading(false);
-    }
+      const data = await farmerApi.getByPump(pumpId);
+      const withDue = await Promise.all(data.map(async (f) => {
+        try {
+          const [payments, lands] = await Promise.all([paymentApi.getByFarmer(f.id), landApi.getByFarmer(f.id)]);
+          let prices: any[] = [];
+          try { prices = await unitPriceApi.getByPump(pumpId); } catch {}
+          const totalPaid = payments.reduce((s, p) => s + p.amount, 0);
+          const totalBigha = lands.reduce((s, l) => s + l.sizeBigha, 0);
+          const price = prices[0]?.pricePerBigha ?? 0;
+          return { ...f, pendingAmount: Math.max(0, totalBigha * price - totalPaid) };
+        } catch { return { ...f, pendingAmount: undefined }; }
+      }));
+      setFarmers(withDue);
+    } catch { toast({ title: "Error", description: "Failed to fetch farmers", variant: "destructive" }); }
+    finally { setLoading(false); }
   };
 
   const handleSearch = async () => {
-    if (!selectedPumpId || !searchQuery.trim()) {
-      fetchFarmers();
-      return;
-    }
+    if (!pumpId || !searchQuery.trim()) { fetchFarmers(); return; }
+    setLoading(true);
     try {
-      setLoading(true);
-      const data = await farmerApi.search(selectedPumpId, searchQuery);
-      setFarmers(data);
-    } catch (error) {
-      console.error("Error searching farmers:", error);
-      toast({
-        title: "Error",
-        description: "Failed to search farmers",
-        variant: "destructive",
-      });
-    } finally {
-      setLoading(false);
-    }
+      const data = await farmerApi.search(pumpId, searchQuery);
+      setFarmers(data.map((f) => ({ ...f, pendingAmount: undefined })));
+    } catch { toast({ title: "Error", variant: "destructive" }); }
+    finally { setLoading(false); }
   };
 
-  if (isLoading || loadingPumps) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
-      </div>
-    );
+  const handleDelete = async () => {
+    if (!deleting) return;
+    setBusy(true);
+    try {
+      await farmerApi.delete(deleting.id);
+      toast({ title: "মুছে ফেলা হয়েছে" });
+      setDeleting(null); fetchFarmers();
+    } catch (e: any) { toast({ title: "Error", description: e.message, variant: "destructive" }); }
+    finally { setBusy(false); }
+  };
+
+  if (isLoading) {
+    return <div className="min-h-screen flex items-center justify-center"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div></div>;
   }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-primary/10 via-background to-accent/10">
-      <nav className="bg-card border-b border-border px-6 py-4">
-        <div className="max-w-7xl mx-auto flex justify-between items-center">
-          <div className="flex items-center gap-3">
-            <Button variant="ghost" size="icon" onClick={() => navigate("/user/dashboard")}>
-              <ArrowLeft className="w-5 h-5" />
-            </Button>
-            <div className="w-10 h-10 bg-primary rounded-full flex items-center justify-center">
-              <Users className="w-6 h-6 text-primary-foreground" />
-            </div>
-            <div>
-              <h1 className="text-xl font-bold">Farmer Management</h1>
-              <p className="text-sm text-muted-foreground">কৃষক পরিচালনা</p>
-            </div>
+      <AppNavbar
+        title="কৃষক পরিচালনা"
+        subtitle="Farmer Management"
+        navItems={userNavItems}
+        rightContent={
+          <div className="flex flex-wrap gap-2 items-center">
+            <PumpSelector />
+            <Button size="sm" onClick={() => navigate(`/user/farmers/create?pumpId=${pumpId}`)}><Plus className="w-4 h-4 mr-1" />কৃষক</Button>
           </div>
-          <Button onClick={() => navigate(`/user/farmers/create?pumpId=${selectedPumpId}`)}>
-            <Plus className="w-4 h-4 mr-2" />
-            Add Farmer
-          </Button>
-        </div>
-      </nav>
+        }
+      />
 
-      <main className="max-w-7xl mx-auto p-6 space-y-6">
+      <main className="max-w-7xl mx-auto p-4 md:p-6 space-y-4">
         <Card>
-          <CardContent className="pt-6">
-            <div className="flex flex-col md:flex-row gap-4">
-              <div className="w-full md:w-64">
-                <Select
-                  value={selectedPumpId?.toString() || ""}
-                  onValueChange={(value) => setSelectedPumpId(parseInt(value))}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select Pump" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {pumps.map((pump) => (
-                      <SelectItem key={pump.id} value={pump.id.toString()}>
-                        {pump.pumpNameEnglish}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="flex-1 flex gap-2">
-                <Input
-                  placeholder="Search by name, mobile, or farmer code..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && handleSearch()}
-                />
-                <Button variant="outline" onClick={handleSearch}>
-                  <Search className="w-4 h-4" />
-                </Button>
-                <Button variant="outline" onClick={fetchFarmers}>
-                  <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
-                </Button>
-              </div>
+          <CardContent className="pt-4">
+            <div className="flex gap-2">
+              <Input placeholder="নাম, মোবাইল বা কোড দিয়ে খুঁজুন..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} onKeyDown={(e) => e.key === "Enter" && handleSearch()} />
+              <Button variant="outline" size="icon" onClick={handleSearch}><Search className="w-4 h-4" /></Button>
+              <Button variant="outline" size="icon" onClick={fetchFarmers}><RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} /></Button>
             </div>
           </CardContent>
         </Card>
 
         <Card>
-          <CardHeader>
-            <CardTitle>Farmers / কৃষক তালিকা</CardTitle>
-          </CardHeader>
+          <CardHeader><CardTitle>কৃষক তালিকা ({farmers.length})</CardTitle></CardHeader>
           <CardContent>
             {loading ? (
-              <div className="flex justify-center py-8">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-              </div>
+              <div className="flex justify-center py-8"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div></div>
             ) : farmers.length === 0 ? (
-              <div className="text-center py-8 text-muted-foreground">
-                No farmers found. Add your first farmer to get started.
-              </div>
+              <p className="text-center py-8 text-muted-foreground">কোনো কৃষক পাওয়া যায়নি।</p>
             ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Farmer Code</TableHead>
-                    <TableHead>Name (Bengali)</TableHead>
-                    <TableHead>Name (English)</TableHead>
-                    <TableHead>Village</TableHead>
-                    <TableHead>Mobile</TableHead>
-                    <TableHead>Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {farmers.map((farmer) => (
-                    <TableRow key={farmer.id}>
-                      <TableCell className="font-mono">{farmer.farmerCode}</TableCell>
-                      <TableCell className="font-medium">{farmer.nameBengali}</TableCell>
-                      <TableCell>{farmer.nameEnglish}</TableCell>
-                      <TableCell>{farmer.village}</TableCell>
-                      <TableCell>{farmer.mobile}</TableCell>
-                      <TableCell>
-                        <div className="flex gap-2">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => navigate(`/user/farmers/${farmer.id}`)}
-                          >
-                            View
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => navigate(`/user/farmers/${farmer.id}/payments`)}
-                          >
-                            Payments
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => navigate(`/user/farmers/${farmer.id}/lands`)}
-                          >
-                            Lands
-                          </Button>
+              <>
+                <div className="md:hidden space-y-3">
+                  {farmers.map((f) => (
+                    <Card key={f.id}>
+                      <CardContent className="p-4">
+                        <div className="flex justify-between items-start" onClick={() => navigate(`/user/farmers/${f.id}`)}>
+                          <div>
+                            <p className="font-medium">{f.nameBengali}</p>
+                            <p className="text-sm text-muted-foreground font-mono">{f.farmerCode}</p>
+                            <p className="text-sm text-muted-foreground">{f.mobile}</p>
+                          </div>
+                          {f.pendingAmount !== undefined && (
+                            <Badge variant={f.pendingAmount > 0 ? "destructive" : "default"}>
+                              {f.pendingAmount > 0 ? `৳${f.pendingAmount.toFixed(0)} বকেয়া` : "পরিশোধিত"}
+                            </Badge>
+                          )}
                         </div>
-                      </TableCell>
-                    </TableRow>
+                        <div className="flex gap-2 mt-3">
+                          <Button size="sm" variant="outline" className="flex-1" onClick={(e) => { e.stopPropagation(); navigate(`/user/farmers/${f.id}/payments`); }}>পেমেন্ট</Button>
+                          <Button size="sm" variant="outline" className="flex-1" onClick={(e) => { e.stopPropagation(); navigate(`/user/farmers/${f.id}/lands`); }}>জমি</Button>
+                          <Button size="sm" variant="outline" className="text-destructive" onClick={(e) => { e.stopPropagation(); setDeleting(f); }}><Trash2 className="w-4 h-4" /></Button>
+                        </div>
+                      </CardContent>
+                    </Card>
                   ))}
-                </TableBody>
-              </Table>
+                </div>
+
+                <div className="hidden md:block overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>কোড</TableHead>
+                        <TableHead>নাম</TableHead>
+                        <TableHead>গ্রাম</TableHead>
+                        <TableHead>মোবাইল</TableHead>
+                        <TableHead>বকেয়া</TableHead>
+                        <TableHead>অ্যাকশন</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {farmers.map((f) => (
+                        <TableRow key={f.id}>
+                          <TableCell className="font-mono text-sm">{f.farmerCode}</TableCell>
+                          <TableCell className="font-medium">{f.nameBengali}</TableCell>
+                          <TableCell>{f.village}</TableCell>
+                          <TableCell>{f.mobile}</TableCell>
+                          <TableCell>
+                            {f.pendingAmount !== undefined ? (
+                              <Badge variant={f.pendingAmount > 0 ? "destructive" : "default"}>
+                                {f.pendingAmount > 0 ? `৳${f.pendingAmount.toFixed(0)}` : "পরিশোধিত"}
+                              </Badge>
+                            ) : "-"}
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex gap-1">
+                              <Button size="sm" variant="outline" onClick={() => navigate(`/user/farmers/${f.id}`)}>বিস্তারিত</Button>
+                              <Button size="sm" variant="outline" onClick={() => navigate(`/user/farmers/${f.id}/payments`)}>পেমেন্ট</Button>
+                              <Button size="sm" variant="outline" onClick={() => navigate(`/user/farmers/${f.id}/lands`)}>জমি</Button>
+                              <Button size="icon" variant="outline" className="h-8 w-8 text-destructive" onClick={() => setDeleting(f)}><Trash2 className="w-3.5 h-3.5" /></Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </>
             )}
           </CardContent>
         </Card>
       </main>
+
+      <AlertDialog open={!!deleting} onOpenChange={(o) => !o && setDeleting(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>কৃষক মুছতে চান?</AlertDialogTitle>
+            <AlertDialogDescription>"{deleting?.nameBengali}" এবং সংশ্লিষ্ট সব ডাটা (জমি, পেমেন্ট) মুছে যাবে।</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>বাতিল</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDelete} disabled={busy} className="bg-destructive text-destructive-foreground">মুছুন</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };
