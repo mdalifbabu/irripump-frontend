@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
-import { pumpApi, userApi } from "@/lib/api/client";
+import { adminApi } from "@/lib/api/client";
 import { Droplet, Users, Plus, Building, Settings } from "lucide-react";
 import AppNavbar from "@/components/AppNavbar";
 import PumpSelector from "@/components/PumpSelector";
@@ -19,7 +19,7 @@ const adminNavItems = [
 
 const AdminDashboard = () => {
   const [loading, setLoading] = useState(true);
-  const [stats, setStats] = useState({ pumps: 0, users: 0 });
+  const [stats, setStats] = useState({ totalPumps: 0, totalUsers: 0, totalFarmers: 0 });
   const navigate = useNavigate();
   const { toast } = useToast();
   const { user, isAuthenticated, isLoading } = useAuth();
@@ -35,12 +35,9 @@ const AdminDashboard = () => {
 
   const fetchStats = async () => {
     try {
-      const [pumps, users] = await Promise.all([
-        pumpApi.getAll(),
-        userApi.getAll().catch(() => []),
-      ]);
-      setStats({ pumps: pumps.length, users: users.length });
-    } catch { console.error("Error fetching stats"); }
+      const data = await adminApi.getStats();
+      setStats(data);
+    } catch { console.error("Error fetching admin stats"); }
     finally { setLoading(false); }
   };
 
@@ -53,9 +50,10 @@ const AdminDashboard = () => {
       <AppNavbar title="অ্যাডমিন ড্যাশবোর্ড" subtitle="আলহাজ্ব ইয়াকুব আলী সেচ প্রকল্প" navItems={adminNavItems} rightContent={<PumpSelector />} />
 
       <main className="max-w-7xl mx-auto p-4 md:p-6 space-y-6">
-        <div className="grid grid-cols-2 md:grid-cols-2 gap-4 md:gap-6">
-          <Card><CardHeader className="flex flex-row items-center justify-between pb-2"><CardTitle className="text-sm font-medium">মোট পাম্প</CardTitle><Droplet className="w-4 h-4 text-muted-foreground" /></CardHeader><CardContent><div className="text-2xl md:text-3xl font-bold">{loading ? "..." : stats.pumps}</div><p className="text-xs text-muted-foreground mt-1">Active pumps</p></CardContent></Card>
-          <Card><CardHeader className="flex flex-row items-center justify-between pb-2"><CardTitle className="text-sm font-medium">মোট ব্যবহারকারী</CardTitle><Users className="w-4 h-4 text-muted-foreground" /></CardHeader><CardContent><div className="text-2xl md:text-3xl font-bold">{loading ? "..." : stats.users}</div><p className="text-xs text-muted-foreground mt-1">Registered operators</p></CardContent></Card>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-4 md:gap-6">
+          <Card><CardHeader className="flex flex-row items-center justify-between pb-2"><CardTitle className="text-sm font-medium">মোট পাম্প</CardTitle><Droplet className="w-4 h-4 text-muted-foreground" /></CardHeader><CardContent><div className="text-2xl md:text-3xl font-bold">{loading ? "..." : stats.totalPumps}</div><p className="text-xs text-muted-foreground mt-1">নিবন্ধিত পাম্প</p></CardContent></Card>
+          <Card><CardHeader className="flex flex-row items-center justify-between pb-2"><CardTitle className="text-sm font-medium">মোট ব্যবহারকারী</CardTitle><Users className="w-4 h-4 text-muted-foreground" /></CardHeader><CardContent><div className="text-2xl md:text-3xl font-bold">{loading ? "..." : stats.totalUsers}</div><p className="text-xs text-muted-foreground mt-1">অপারেটর</p></CardContent></Card>
+          <Card className="col-span-2 md:col-span-1"><CardHeader className="flex flex-row items-center justify-between pb-2"><CardTitle className="text-sm font-medium">মোট কৃষক</CardTitle><Building className="w-4 h-4 text-muted-foreground" /></CardHeader><CardContent><div className="text-2xl md:text-3xl font-bold">{loading ? "..." : stats.totalFarmers}</div><p className="text-xs text-muted-foreground mt-1">নিবন্ধিত কৃষক</p></CardContent></Card>
         </div>
 
         <Card>

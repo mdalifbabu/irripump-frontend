@@ -23,6 +23,8 @@ import PumpSelector from "@/components/PumpSelector";
 const userNavItems = [
   { label: "ড্যাশবোর্ড", path: "/user/dashboard" },
   { label: "কৃষক", path: "/user/farmers" },
+  { label: "মৌসুম", path: "/user/seasons" },
+  { label: "জমি", path: "/user/lands" },
   { label: "ইউনিট মূল্য", path: "/user/unit-prices" },
 ];
 

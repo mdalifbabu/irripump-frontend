@@ -58,8 +58,7 @@ const UserList = () => {
         fullName: editing.fullName,
         email: editing.email,
         mobile: editing.mobile,
-        pumpIds: editing.pumpIds,
-      } as any);
+      });
       toast({ title: "আপডেট সফল" });
       setEditing(null); fetchUsers();
     } catch (e: any) { toast({ title: "Error", description: e.message, variant: "destructive" }); }

@@ -15,17 +15,20 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { usePumpContext } from "@/contexts/PumpContext";
-import { unitPriceApi } from "@/lib/api/client";
+import { adminUnitPriceApi } from "@/lib/api/client";
 import type { UnitPrice } from "@/lib/api/types";
-import { Plus, Loader2, Pencil, Trash2 } from "lucide-react";
+import { Plus, Loader2, Pencil, Trash2, DollarSign } from "lucide-react";
 import AppNavbar from "@/components/AppNavbar";
 import PumpSelector from "@/components/PumpSelector";
 
-const userNavItems = [
-  { label: "ড্যাশবোর্ড", path: "/user/dashboard" },
-  { label: "কৃষক", path: "/user/farmers" },
-  { label: "মৌসুম", path: "/user/seasons" },
-  { label: "ইউনিট মূল্য", path: "/user/unit-prices" },
+const adminNavItems = [
+  { label: "ড্যাশবোর্ড", path: "/admin/dashboard" },
+  { label: "পাম্প", path: "/admin/pumps" },
+  { label: "ব্যবহারকারী", path: "/admin/users" },
+  { label: "কৃষক", path: "/admin/farmers" },
+  { label: "জমি", path: "/admin/lands" },
+  { label: "ইউনিট মূল্য", path: "/admin/unit-prices" },
+  { label: "সেটিংস", path: "/admin/settings" },
 ];
 
 const schema = z.object({
@@ -35,7 +38,7 @@ const schema = z.object({
 });
 type FormData = z.infer<typeof schema>;
 
-const UnitPriceList = () => {
+const AdminUnitPriceList = () => {
   const [prices, setPrices] = useState<UnitPrice[]>([]);
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -45,7 +48,7 @@ const UnitPriceList = () => {
   const [busy, setBusy] = useState(false);
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { isAuthenticated, isLoading } = useAuth();
+  const { user, isAuthenticated, isLoading } = useAuth();
   const { pumpId, season, year, seasons } = usePumpContext();
 
   const form = useForm<FormData>({
@@ -58,17 +61,18 @@ const UnitPriceList = () => {
   });
 
   useEffect(() => {
-    if (!isLoading && !isAuthenticated) navigate("/auth");
-  }, [isLoading, isAuthenticated, navigate]);
+    if (!isLoading && !isAuthenticated) { navigate("/auth"); return; }
+    if (!isLoading && user?.role !== "ADMIN") { navigate("/auth"); }
+  }, [isLoading, isAuthenticated, user, navigate]);
 
   useEffect(() => { if (pumpId) fetchPrices(); }, [pumpId]);
 
-  const filtered = prices.filter((p) => (p.season ?? "").toUpperCase() === season.toUpperCase() && p.year === year);
+  const filtered = prices.filter((p) => (p.season ?? "").toUpperCase() === season && p.year === year);
 
   const fetchPrices = async () => {
     if (!pumpId) return;
     setLoading(true);
-    try { setPrices(await unitPriceApi.getByPump(pumpId)); }
+    try { setPrices(await adminUnitPriceApi.getByPump(pumpId)); }
     catch { toast({ title: "Error", description: "Failed to fetch unit prices", variant: "destructive" }); }
     finally { setLoading(false); }
   };
@@ -82,7 +86,7 @@ const UnitPriceList = () => {
     }
     setSubmitting(true);
     try {
-      await unitPriceApi.create(pumpId, {
+      await adminUnitPriceApi.create(pumpId, {
         pricePerShatak: data.pricePerShatak,
         seasonId,
         effectiveFrom: data.effectiveFrom,
@@ -90,7 +94,8 @@ const UnitPriceList = () => {
       });
       toast({ title: "সফল", description: "Unit price created" });
       form.reset({ pricePerShatak: 0, effectiveFrom: new Date().toISOString().split("T")[0], effectiveTo: "" });
-      setShowForm(false); fetchPrices();
+      setShowForm(false);
+      fetchPrices();
     } catch (e: any) {
       toast({ title: "Error", description: e.message, variant: "destructive" });
     } finally { setSubmitting(false); }
@@ -100,13 +105,14 @@ const UnitPriceList = () => {
     if (!editing) return;
     setBusy(true);
     try {
-      await unitPriceApi.update(editing.id, {
+      await adminUnitPriceApi.update(editing.id, {
         pricePerShatak: editing.pricePerShatak,
         effectiveFrom: editing.effectiveFrom,
         effectiveTo: editing.effectiveTo,
       });
       toast({ title: "আপডেট সফল" });
-      setEditing(null); fetchPrices();
+      setEditing(null);
+      fetchPrices();
     } catch (e: any) { toast({ title: "Error", description: e.message, variant: "destructive" }); }
     finally { setBusy(false); }
   };
@@ -115,9 +121,10 @@ const UnitPriceList = () => {
     if (!deleting) return;
     setBusy(true);
     try {
-      await unitPriceApi.delete(deleting.id);
+      await adminUnitPriceApi.delete(deleting.id);
       toast({ title: "মুছে ফেলা হয়েছে" });
-      setDeleting(null); fetchPrices();
+      setDeleting(null);
+      fetchPrices();
     } catch (e: any) { toast({ title: "Error", description: e.message, variant: "destructive" }); }
     finally { setBusy(false); }
   };
@@ -129,9 +136,9 @@ const UnitPriceList = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-primary/10 via-background to-accent/10">
       <AppNavbar
-        title="ইউনিট মূল্য"
+        title="ইউনিট মূল্য (অ্যাডমিন)"
         subtitle="Unit Prices"
-        navItems={userNavItems}
+        navItems={adminNavItems}
         rightContent={
           <div className="flex flex-wrap gap-2 items-center">
             <PumpSelector />
@@ -143,9 +150,7 @@ const UnitPriceList = () => {
       <main className="max-w-7xl mx-auto p-4 md:p-6 space-y-6">
         {showForm && (
           <Card>
-            <CardHeader>
-              <CardTitle>নতুন একক মূল্য — {season} / {year}</CardTitle>
-            </CardHeader>
+            <CardHeader><CardTitle className="flex items-center gap-2"><DollarSign className="w-5 h-5" />নতুন একক মূল্য — {season} / {year}</CardTitle></CardHeader>
             <CardContent>
               <Form {...form}>
                 <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
@@ -153,9 +158,7 @@ const UnitPriceList = () => {
                     <FormField control={form.control} name="pricePerShatak" render={({ field }) => (
                       <FormItem>
                         <FormLabel>মূল্য / শতক (৳)</FormLabel>
-                        <FormControl>
-                          <Input type="number" {...field} onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)} />
-                        </FormControl>
+                        <FormControl><Input type="number" {...field} onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)} /></FormControl>
                         {field.value > 0 && <p className="text-xs text-muted-foreground">= ৳{(field.value * 33).toLocaleString()}/বিঘা</p>}
                         <FormMessage />
                       </FormItem>
@@ -206,7 +209,7 @@ const UnitPriceList = () => {
                         <TableCell className="font-bold">৳{p.pricePerShatak.toLocaleString()}/শতক</TableCell>
                         <TableCell className="text-muted-foreground">৳{(p.pricePerShatak * 33).toLocaleString()}/বিঘা</TableCell>
                         <TableCell className="hidden md:table-cell">{p.effectiveFrom}</TableCell>
-                        <TableCell className="hidden md:table-cell">{p.effectiveTo}</TableCell>
+                        <TableCell className="hidden md:table-cell">{p.effectiveTo || "-"}</TableCell>
                         <TableCell>
                           <div className="flex gap-1">
                             <Button size="icon" variant="outline" className="h-8 w-8" onClick={() => setEditing({ ...p })}><Pencil className="w-3.5 h-3.5" /></Button>
@@ -229,12 +232,12 @@ const UnitPriceList = () => {
           {editing && (
             <div className="space-y-3">
               <div>
-                <Label>মূল্য / শতক</Label>
+                <Label>মূল্য / শতক (৳)</Label>
                 <Input type="number" value={editing.pricePerShatak} onChange={(e) => setEditing({ ...editing, pricePerShatak: parseFloat(e.target.value) || 0 })} />
                 {editing.pricePerShatak > 0 && <p className="text-xs text-muted-foreground mt-1">= ৳{(editing.pricePerShatak * 33).toLocaleString()}/বিঘা</p>}
               </div>
               <div><Label>কার্যকর শুরু</Label><Input type="date" value={editing.effectiveFrom} onChange={(e) => setEditing({ ...editing, effectiveFrom: e.target.value })} /></div>
-              <div><Label>কার্যকর শেষ</Label><Input type="date" value={editing.effectiveTo} onChange={(e) => setEditing({ ...editing, effectiveTo: e.target.value })} /></div>
+              <div><Label>কার্যকর শেষ</Label><Input type="date" value={editing.effectiveTo ?? ""} onChange={(e) => setEditing({ ...editing, effectiveTo: e.target.value })} /></div>
             </div>
           )}
           <DialogFooter>
@@ -248,7 +251,7 @@ const UnitPriceList = () => {
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>মূল্য মুছতে চান?</AlertDialogTitle>
-            <AlertDialogDescription>{deleting?.season} / {deleting?.year} — ৳{deleting?.pricePerShatak} মুছে যাবে।</AlertDialogDescription>
+            <AlertDialogDescription>{deleting?.season} / {deleting?.year} — ৳{deleting?.pricePerShatak}/শতক মুছে যাবে।</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>বাতিল</AlertDialogCancel>
@@ -260,4 +263,4 @@ const UnitPriceList = () => {
   );
 };
 
-export default UnitPriceList;
+export default AdminUnitPriceList;

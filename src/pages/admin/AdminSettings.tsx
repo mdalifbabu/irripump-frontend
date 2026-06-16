@@ -21,6 +21,7 @@ const adminNavItems = [
   { label: "পাম্প", path: "/admin/pumps" },
   { label: "ব্যবহারকারী", path: "/admin/users" },
   { label: "কৃষক", path: "/admin/farmers" },
+  { label: "জমি", path: "/admin/lands" },
   { label: "সেটিংস", path: "/admin/settings" },
 ];
 
@@ -51,7 +52,7 @@ const AdminSettings = () => {
   const fetchSettings = async () => {
     if (!pumpId) return;
     setLoading(true);
-    try { setSettings(await settingsApi.getByPump(pumpId)); }
+    try { setSettings(await settingsApi.getAll(pumpId)); }
     catch { console.error("Error fetching settings"); }
     finally { setLoading(false); }
   };
@@ -59,17 +60,17 @@ const AdminSettings = () => {
   const handleCreate = async () => {
     if (!pumpId || !newKey || !newValue) return;
     try {
-      await settingsApi.create(pumpId, { key: newKey, value: newValue, category: newCategory || "general" });
+      await settingsApi.save(pumpId, { key: newKey, value: newValue, category: newCategory || "general" });
       toast({ title: "সেটিং তৈরি হয়েছে" });
       setNewKey(""); setNewValue(""); setNewCategory(""); fetchSettings();
     } catch (e: any) { toast({ title: "Error", description: e.message, variant: "destructive" }); }
   };
 
   const handleUpdate = async () => {
-    if (!editing) return;
+    if (!editing || !pumpId) return;
     setBusy(true);
     try {
-      await settingsApi.update(editing.id, { key: editing.key, value: editing.value, category: editing.category });
+      await settingsApi.save(pumpId, { key: editing.settingKey, value: editing.settingValue, category: editing.settingCategory });
       toast({ title: "আপডেট সফল" });
       setEditing(null); fetchSettings();
     } catch (e: any) { toast({ title: "Error", description: e.message, variant: "destructive" }); }
@@ -122,9 +123,9 @@ const AdminSettings = () => {
                   <TableBody>
                     {settings.map((s) => (
                       <TableRow key={s.id}>
-                        <TableCell className="font-mono text-sm">{s.key}</TableCell>
-                        <TableCell>{s.value}</TableCell>
-                        <TableCell>{s.category}</TableCell>
+                        <TableCell className="font-mono text-sm">{s.settingKey}</TableCell>
+                        <TableCell>{s.settingValue}</TableCell>
+                        <TableCell>{s.settingCategory}</TableCell>
                         <TableCell>
                           <div className="flex gap-1">
                             <Button size="icon" variant="outline" className="h-8 w-8" onClick={() => setEditing({ ...s })}><Pencil className="w-3.5 h-3.5" /></Button>
@@ -146,9 +147,9 @@ const AdminSettings = () => {
           <DialogHeader><DialogTitle>সেটিং সম্পাদনা</DialogTitle></DialogHeader>
           {editing && (
             <div className="space-y-3">
-              <div><Label>Key</Label><Input value={editing.key} onChange={(e) => setEditing({ ...editing, key: e.target.value })} /></div>
-              <div><Label>Value</Label><Input value={editing.value} onChange={(e) => setEditing({ ...editing, value: e.target.value })} /></div>
-              <div><Label>Category</Label><Input value={editing.category} onChange={(e) => setEditing({ ...editing, category: e.target.value })} /></div>
+              <div><Label>Key</Label><Input value={editing.settingKey} onChange={(e) => setEditing({ ...editing, settingKey: e.target.value })} /></div>
+              <div><Label>Value</Label><Input value={editing.settingValue} onChange={(e) => setEditing({ ...editing, settingValue: e.target.value })} /></div>
+              <div><Label>Category</Label><Input value={editing.settingCategory} onChange={(e) => setEditing({ ...editing, settingCategory: e.target.value })} /></div>
             </div>
           )}
           <DialogFooter>
@@ -162,7 +163,7 @@ const AdminSettings = () => {
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>সেটিং মুছতে চান?</AlertDialogTitle>
-            <AlertDialogDescription>"{deleting?.key}" মুছে যাবে।</AlertDialogDescription>
+            <AlertDialogDescription>"{deleting?.settingKey}" মুছে যাবে।</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>বাতিল</AlertDialogCancel>

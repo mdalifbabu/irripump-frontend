@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -6,7 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { useToast } from "@/hooks/use-toast";
 import { farmerPortalApi } from "@/lib/api/client";
 import type { FarmerPortalData } from "@/lib/api/types";
-import { Droplet, User, MapPin, CreditCard, FileText } from "lucide-react";
+import { Droplet, User, MapPin, CreditCard, FileText, ArrowLeft } from "lucide-react";
 import {
   Table,
   TableBody,
@@ -21,6 +22,7 @@ const FarmerPortal = () => {
   const [loading, setLoading] = useState(false);
   const [farmerData, setFarmerData] = useState<FarmerPortalData | null>(null);
   const { toast } = useToast();
+  const navigate = useNavigate();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -62,6 +64,11 @@ const FarmerPortal = () => {
     return (
       <div className="min-h-screen bg-gradient-to-br from-primary/20 via-background to-accent/20 p-4">
         <div className="max-w-4xl mx-auto space-y-6">
+          <Button variant="ghost" size="sm" className="gap-2" onClick={() => navigate("/")}>
+            <ArrowLeft className="w-4 h-4" />
+            হোম পেজে ফিরুন
+          </Button>
+
           {/* Header */}
           <Card>
             <CardHeader className="text-center">
@@ -210,12 +217,12 @@ const FarmerPortal = () => {
                             className={`px-2 py-1 rounded text-xs ${
                               payment.paymentType === "PAYMENT"
                                 ? "bg-green-100 text-green-700"
-                                : payment.paymentType === "REFUND"
+                                : payment.paymentType === "DEDUCTION"
                                 ? "bg-red-100 text-red-700"
                                 : "bg-blue-100 text-blue-700"
                             }`}
                           >
-                            {payment.paymentType}
+                            {payment.paymentType === "PAYMENT" ? "পেমেন্ট" : payment.paymentType === "ADJUSTMENT" ? "সমন্বয়" : "কর্তন"}
                           </span>
                         </TableCell>
                       </TableRow>
@@ -238,7 +245,12 @@ const FarmerPortal = () => {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/20 via-background to-accent/20 p-4">
-      <Card className="w-full max-w-md shadow-2xl">
+      <div className="w-full max-w-md space-y-4">
+        <Button variant="ghost" size="sm" className="gap-2" onClick={() => navigate("/")}>
+          <ArrowLeft className="w-4 h-4" />
+          হোম পেজে ফিরুন
+        </Button>
+      <Card className="shadow-2xl">
         <CardHeader className="space-y-3 text-center">
           <div className="mx-auto w-16 h-16 bg-primary rounded-full flex items-center justify-center">
             <Droplet className="w-8 h-8 text-primary-foreground" />
@@ -275,6 +287,7 @@ const FarmerPortal = () => {
           </form>
         </CardContent>
       </Card>
+      </div>
     </div>
   );
 };

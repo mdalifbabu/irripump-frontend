@@ -7,7 +7,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { usePumpContext } from "@/contexts/PumpContext";
-import { farmerApi } from "@/lib/api/client";
+import { adminApi } from "@/lib/api/client";
 import type { Farmer } from "@/lib/api/types";
 import { Search, RefreshCw } from "lucide-react";
 import AppNavbar from "@/components/AppNavbar";
@@ -18,6 +18,7 @@ const adminNavItems = [
   { label: "পাম্প", path: "/admin/pumps" },
   { label: "ব্যবহারকারী", path: "/admin/users" },
   { label: "কৃষক", path: "/admin/farmers" },
+  { label: "জমি", path: "/admin/lands" },
   { label: "সেটিংস", path: "/admin/settings" },
 ];
 
@@ -38,20 +39,18 @@ const AdminFarmerList = () => {
     }
   }, [isLoading, isAuthenticated, user, navigate, toast]);
 
-  useEffect(() => { if (pumpId) fetchFarmers(); }, [pumpId]);
+  useEffect(() => { fetchFarmers(); }, [pumpId]);
 
   const fetchFarmers = async () => {
-    if (!pumpId) return;
     setLoading(true);
-    try { setFarmers(await farmerApi.getByPump(pumpId)); }
+    try { setFarmers(await adminApi.getAllFarmers(pumpId || undefined)); }
     catch { toast({ title: "Error", description: "Failed to fetch farmers", variant: "destructive" }); }
     finally { setLoading(false); }
   };
 
   const handleSearch = async () => {
-    if (!pumpId || !searchQuery.trim()) { fetchFarmers(); return; }
     setLoading(true);
-    try { setFarmers(await farmerApi.search(pumpId, searchQuery)); }
+    try { setFarmers(await adminApi.getAllFarmers(pumpId || undefined, searchQuery.trim() || undefined)); }
     catch { toast({ title: "Error", variant: "destructive" }); }
     finally { setLoading(false); }
   };
@@ -62,7 +61,7 @@ const AdminFarmerList = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-primary/10 via-background to-accent/10">
-      <AppNavbar title="সকল কৃষক" subtitle="All Farmers (Admin)" navItems={adminNavItems} rightContent={<PumpSelector />} />
+      <AppNavbar title="সকল কৃষক" subtitle="All Farmers (Admin)" navItems={adminNavItems} rightContent={<div className="flex gap-2 items-center"><PumpSelector /><Button size="sm" variant="outline" onClick={fetchFarmers}><RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} /></Button></div>} />
 
       <main className="max-w-7xl mx-auto p-4 md:p-6 space-y-6">
         <Card>
@@ -88,8 +87,9 @@ const AdminFarmerList = () => {
                   <TableHeader>
                     <TableRow>
                       <TableHead>কোড</TableHead>
-                      <TableHead>নাম</TableHead>
+                      <TableHead>নাম (বাংলা)</TableHead>
                       <TableHead className="hidden md:table-cell">গ্রাম</TableHead>
+                      <TableHead className="hidden lg:table-cell">পাম্প</TableHead>
                       <TableHead>মোবাইল</TableHead>
                       <TableHead>অ্যাকশন</TableHead>
                     </TableRow>
@@ -100,6 +100,7 @@ const AdminFarmerList = () => {
                         <TableCell className="font-mono text-sm">{f.farmerCode}</TableCell>
                         <TableCell className="font-medium">{f.nameBengali}</TableCell>
                         <TableCell className="hidden md:table-cell">{f.village}</TableCell>
+                        <TableCell className="hidden lg:table-cell text-xs text-muted-foreground">{f.pumpName || `#${f.pumpId}`}</TableCell>
                         <TableCell>{f.mobile}</TableCell>
                         <TableCell>
                           <Button size="sm" variant="outline" onClick={() => navigate(`/user/farmers/${f.id}`)}>বিস্তারিত</Button>

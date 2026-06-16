@@ -24,15 +24,17 @@ import PumpSelector from "@/components/PumpSelector";
 const userNavItems = [
   { label: "ড্যাশবোর্ড", path: "/user/dashboard" },
   { label: "কৃষক", path: "/user/farmers" },
+  { label: "মৌসুম", path: "/user/seasons" },
+  { label: "জমি", path: "/user/lands" },
   { label: "ইউনিট মূল্য", path: "/user/unit-prices" },
 ];
 
 const schema = z.object({
   amount: z.number().min(1),
   paymentDate: z.string().min(1),
-  paymentMethod: z.enum(["CASH", "BKASH", "NAGAD", "BANK"]),
+  paymentMethod: z.enum(["CASH", "BANK", "MOBILE_BANKING"]),
   transactionReference: z.string().optional(),
-  paymentType: z.enum(["PAYMENT", "REFUND", "ADVANCE"]),
+  paymentType: z.enum(["PAYMENT", "ADJUSTMENT", "DEDUCTION"]),
 });
 type FormData = z.infer<typeof schema>;
 
@@ -53,7 +55,7 @@ const FarmerPayments = () => {
 
   const form = useForm<FormData>({
     resolver: zodResolver(schema),
-    defaultValues: { amount: 0, paymentDate: new Date().toISOString().split("T")[0], paymentMethod: "CASH", paymentType: "PAYMENT", transactionReference: "" },
+    defaultValues: { amount: 0, paymentDate: new Date().toISOString().split("T")[0], paymentMethod: "CASH" as const, paymentType: "PAYMENT" as const, transactionReference: "" },
   });
 
   useEffect(() => {
@@ -116,10 +118,9 @@ const FarmerPayments = () => {
     finally { setDownloading(false); }
   };
 
-  const methodBadge = (m: string) => {
-    const c: Record<string, string> = { CASH: "bg-green-500", BKASH: "bg-pink-500", NAGAD: "bg-orange-500", BANK: "bg-blue-500" };
-    return <Badge className={c[m] || ""}>{m}</Badge>;
-  };
+  const methodLabel: Record<string, string> = { CASH: "নগদ", BANK: "ব্যাংক", MOBILE_BANKING: "মোবাইল ব্যাংকিং" };
+  const methodColor: Record<string, string> = { CASH: "bg-green-500", BANK: "bg-blue-500", MOBILE_BANKING: "bg-pink-500" };
+  const methodBadge = (m: string) => <Badge className={methodColor[m] || ""}>{methodLabel[m] || m}</Badge>;
 
   if (isLoading || loading) {
     return <div className="min-h-screen flex items-center justify-center"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div></div>;
@@ -152,10 +153,10 @@ const FarmerPayments = () => {
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <FormField control={form.control} name="amount" render={({ field }) => (<FormItem><FormLabel>পরিমাণ (৳)</FormLabel><FormControl><Input type="number" {...field} onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)} /></FormControl><FormMessage /></FormItem>)} />
                     <FormField control={form.control} name="paymentDate" render={({ field }) => (<FormItem><FormLabel>তারিখ</FormLabel><FormControl><Input type="date" {...field} /></FormControl><FormMessage /></FormItem>)} />
-                    <FormField control={form.control} name="paymentMethod" render={({ field }) => (<FormItem><FormLabel>পদ্ধতি</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl><SelectContent><SelectItem value="CASH">নগদ</SelectItem><SelectItem value="BKASH">bKash</SelectItem><SelectItem value="NAGAD">Nagad</SelectItem><SelectItem value="BANK">ব্যাংক</SelectItem></SelectContent></Select><FormMessage /></FormItem>)} />
+                    <FormField control={form.control} name="paymentMethod" render={({ field }) => (<FormItem><FormLabel>পদ্ধতি</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl><SelectContent><SelectItem value="CASH">নগদ</SelectItem><SelectItem value="BANK">ব্যাংক</SelectItem><SelectItem value="MOBILE_BANKING">মোবাইল ব্যাংকিং</SelectItem></SelectContent></Select><FormMessage /></FormItem>)} />
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <FormField control={form.control} name="paymentType" render={({ field }) => (<FormItem><FormLabel>ধরন</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl><SelectContent><SelectItem value="PAYMENT">PAYMENT</SelectItem><SelectItem value="ADVANCE">ADVANCE</SelectItem><SelectItem value="REFUND">REFUND</SelectItem></SelectContent></Select><FormMessage /></FormItem>)} />
+                    <FormField control={form.control} name="paymentType" render={({ field }) => (<FormItem><FormLabel>ধরন</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl><SelectContent><SelectItem value="PAYMENT">পেমেন্ট</SelectItem><SelectItem value="ADJUSTMENT">সমন্বয়</SelectItem><SelectItem value="DEDUCTION">কর্তন</SelectItem></SelectContent></Select><FormMessage /></FormItem>)} />
                     <FormField control={form.control} name="transactionReference" render={({ field }) => (<FormItem><FormLabel>Transaction Ref</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} />
                   </div>
                   <div className="flex gap-2 justify-end">
