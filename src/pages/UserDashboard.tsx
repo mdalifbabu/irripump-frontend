@@ -1,185 +1,74 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { supabase } from "@/integrations/supabase/client";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
-import { Droplet, Users, DollarSign, LogOut, Settings } from "lucide-react";
+import { useAuth } from "@/contexts/AuthContext";
+import { usePumpContext } from "@/contexts/PumpContext";
+import { dashboardApi } from "@/lib/api/client";
+import type { DashboardStats } from "@/lib/api/types";
+import { Users, DollarSign, Map, CreditCard } from "lucide-react";
+import AppNavbar from "@/components/AppNavbar";
+import PumpSelector from "@/components/PumpSelector";
+
+const userNavItems = [
+  { label: "ড্যাশবোর্ড", path: "/user/dashboard" },
+  { label: "কৃষক", path: "/user/farmers" },
+  { label: "মৌসুম", path: "/user/seasons" },
+  { label: "ইউনিট মূল্য", path: "/user/unit-prices" },
+];
 
 const UserDashboard = () => {
-  const [loading, setLoading] = useState(true);
-  const [stats, setStats] = useState({
-    pumps: 0,
-    farmers: 0,
-    totalIncome: 0,
-    totalDue: 0,
+  const [stats, setStats] = useState<DashboardStats>({
+    totalFarmers: 0, totalLands: 0, totalLandSize: 0, totalIncome: 0, totalDue: 0, totalCost: 0,
   });
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { user, isAuthenticated, isLoading } = useAuth();
+  const { pumpId, season, year, loadingPumps } = usePumpContext();
 
   useEffect(() => {
-    checkAccess();
-    fetchStats();
-  }, []);
-
-  const checkAccess = async () => {
-    const { data: { user } } = await supabase.auth.getUser();
-    
-    if (!user) {
-      navigate("/auth");
-      return;
-    }
-
-    const { data: roles } = await supabase
-      .from("user_roles")
-      .select("role")
-      .eq("user_id", user.id)
-      .eq("role", "user");
-
-    if (!roles || roles.length === 0) {
-      toast({
-        title: "Access Denied",
-        description: "You don't have user access",
-        variant: "destructive",
-      });
+    if (!isLoading && !isAuthenticated) { navigate("/auth"); return; }
+    if (!isLoading && user?.role !== "USER") {
+      toast({ title: "Access Denied", variant: "destructive" });
       navigate("/auth");
     }
-  };
+  }, [isLoading, isAuthenticated, user, navigate, toast]);
 
-  const fetchStats = async () => {
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
+  useEffect(() => {
+    if (!pumpId) return;
+    dashboardApi.getStats(pumpId, season, year).then((data) => {
+      setStats(data);
+    }).catch(() => {});
+  }, [pumpId, season, year]);
 
-      // Get assigned pumps
-      const { data: assignments } = await supabase
-        .from("user_pump_assignments")
-        .select("pump_id")
-        .eq("user_id", user.id)
-        .eq("is_active", true);
-
-      const pumpIds = assignments?.map(a => a.pump_id) || [];
-
-      // Get farmers count
-      const { count: farmersCount } = await supabase
-        .from("farmers")
-        .select("id", { count: "exact", head: true })
-        .in("pump_id", pumpIds);
-
-      // Get payments
-      const { data: payments } = await supabase
-        .from("payments")
-        .select("amount")
-        .in("pump_id", pumpIds);
-
-      const totalIncome = payments?.reduce((sum, p) => sum + Number(p.amount), 0) || 0;
-
-      setStats({
-        pumps: pumpIds.length,
-        farmers: farmersCount || 0,
-        totalIncome,
-        totalDue: 0, // Calculate based on lands and prices
-      });
-    } catch (error) {
-      console.error("Error fetching stats:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleLogout = async () => {
-    await supabase.auth.signOut();
-    navigate("/auth");
-  };
+  if (isLoading || loadingPumps) {
+    return <div className="min-h-screen flex items-center justify-center"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div></div>;
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-primary/10 via-background to-accent/10">
-      <nav className="bg-card border-b border-border px-6 py-4">
-        <div className="max-w-7xl mx-auto flex justify-between items-center">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-primary rounded-full flex items-center justify-center">
-              <Droplet className="w-6 h-6 text-primary-foreground" />
-            </div>
-            <div>
-              <h1 className="text-xl font-bold">User Dashboard</h1>
-              <p className="text-sm text-muted-foreground">Pump Operator Panel</p>
-            </div>
-          </div>
-          <Button variant="outline" onClick={handleLogout}>
-            <LogOut className="w-4 h-4 mr-2" />
-            Logout
-          </Button>
-        </div>
-      </nav>
+      <AppNavbar
+        title="অপারেটর ড্যাশবোর্ড"
+        subtitle="Pump Operator Panel"
+        navItems={userNavItems}
+        rightContent={<PumpSelector />}
+      />
 
-      <main className="max-w-7xl mx-auto p-6 space-y-6">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium">My Pumps</CardTitle>
-              <Droplet className="w-4 h-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-3xl font-bold">{loading ? "..." : stats.pumps}</div>
-              <p className="text-xs text-muted-foreground mt-1">Assigned pumps</p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium">Farmers</CardTitle>
-              <Users className="w-4 h-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-3xl font-bold">{loading ? "..." : stats.farmers}</div>
-              <p className="text-xs text-muted-foreground mt-1">Total farmers</p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium">Total Income</CardTitle>
-              <DollarSign className="w-4 h-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-3xl font-bold">৳{loading ? "..." : stats.totalIncome.toFixed(2)}</div>
-              <p className="text-xs text-muted-foreground mt-1">Collected payments</p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium">Total Due</CardTitle>
-              <DollarSign className="w-4 h-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-3xl font-bold">৳{loading ? "..." : stats.totalDue.toFixed(2)}</div>
-              <p className="text-xs text-muted-foreground mt-1">Outstanding payments</p>
-            </CardContent>
-          </Card>
+      <main className="max-w-7xl mx-auto p-4 md:p-6 space-y-6">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-6">
+          <Card><CardHeader className="flex flex-row items-center justify-between pb-2"><CardTitle className="text-xs md:text-sm font-medium">কৃষক</CardTitle><Users className="w-4 h-4 text-muted-foreground" /></CardHeader><CardContent><div className="text-xl md:text-3xl font-bold">{stats.totalFarmers}</div></CardContent></Card>
+          <Card><CardHeader className="flex flex-row items-center justify-between pb-2"><CardTitle className="text-xs md:text-sm font-medium">মোট জমি (বিঘা)</CardTitle><Map className="w-4 h-4 text-muted-foreground" /></CardHeader><CardContent><div className="text-xl md:text-3xl font-bold">{Number(stats.totalLandSize).toFixed(2)}</div><p className="text-xs text-muted-foreground">{stats.totalLands} পিস</p></CardContent></Card>
+          <Card><CardHeader className="flex flex-row items-center justify-between pb-2"><CardTitle className="text-xs md:text-sm font-medium">মোট আয়</CardTitle><DollarSign className="w-4 h-4 text-muted-foreground" /></CardHeader><CardContent><div className="text-xl md:text-3xl font-bold text-green-600">৳{Number(stats.totalIncome).toFixed(0)}</div></CardContent></Card>
+          <Card><CardHeader className="flex flex-row items-center justify-between pb-2"><CardTitle className="text-xs md:text-sm font-medium">মোট বকেয়া</CardTitle><DollarSign className="w-4 h-4 text-muted-foreground" /></CardHeader><CardContent><div className="text-xl md:text-3xl font-bold text-red-600">৳{Number(stats.totalDue).toFixed(0)}</div></CardContent></Card>
         </div>
 
         <Card>
-          <CardHeader>
-            <CardTitle>Quick Actions</CardTitle>
-          </CardHeader>
-          <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <Button className="w-full justify-start" variant="outline" onClick={() => navigate("/user/farmers")}>
-              <Users className="w-4 h-4 mr-2" />
-              Manage Farmers
-            </Button>
-            <Button className="w-full justify-start" variant="outline" onClick={() => navigate("/user/lands")}>
-              <Droplet className="w-4 h-4 mr-2" />
-              Manage Lands
-            </Button>
-            <Button className="w-full justify-start" variant="outline" onClick={() => navigate("/user/payments")}>
-              <DollarSign className="w-4 h-4 mr-2" />
-              Track Payments
-            </Button>
-            <Button className="w-full justify-start" variant="outline" onClick={() => navigate("/user/settings")}>
-              <Settings className="w-4 h-4 mr-2" />
-              Settings & Pricing
-            </Button>
+          <CardHeader><CardTitle>দ্রুত কার্যক্রম</CardTitle></CardHeader>
+          <CardContent className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            <Button className="w-full justify-start" variant="outline" onClick={() => navigate("/user/farmers")}><Users className="w-4 h-4 mr-2" />কৃষক পরিচালনা</Button>
+            <Button className="w-full justify-start" variant="outline" onClick={() => navigate("/user/unit-prices")}><DollarSign className="w-4 h-4 mr-2" />ইউনিট মূল্য</Button>
+            <Button className="w-full justify-start" variant="outline" onClick={() => navigate("/user/farmers")}><CreditCard className="w-4 h-4 mr-2" />পেমেন্ট ট্র্যাকিং</Button>
           </CardContent>
         </Card>
       </main>
