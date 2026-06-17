@@ -6,11 +6,14 @@ import type {
   VerifyFarmerCodeRequest, CreateSettingRequest, FarmerLandAssignment, Season,
   AssignLandRequest, FarmerSummaryResponse, FarmerDetailResponse, CreateSeasonRequest,
   SeasonEnrollmentResponse, SeasonDashboard, LedgerResponse,
+  SeasonType, CreateSeasonTypeRequest, UpdateSeasonTypeRequest,
+  AdminDashboardGroupBy, AdminDashboardResponse, AdjustDueRequest, ReasonRequest,
+  DueEntry, AuditLogEntry, AuditLogSearchParams, InvoiceResponse,
 } from "./types";
 
 //const API_BASE_URL = "http://localhost:8081/api";
 //const API_BASE_URL = "http://192.168.0.106:8081/api";
-const API_BASE_URL = "https://irripump-backend-latest.onrender.com/api";
+const API_BASE_URL = "https://api.irripump.com/api";
 
 const TOKEN_KEY = "irripump_token";
 const REFRESH_TOKEN_KEY = "irripump_refresh_token";
@@ -129,6 +132,8 @@ export const userApi = {
     apiRequest<void>(`/admin/users/${userId}/pumps/${pumpId}`, { method: "DELETE" }),
   impersonate: async (userId: number): Promise<{ token: string }> =>
     apiRequest<{ token: string }>(`/admin/users/${userId}/impersonate`, { method: "POST" }),
+  setStatus: async (userId: number, isActive: boolean): Promise<User> =>
+    apiRequest<User>(`/admin/users/${userId}/status`, { method: "PATCH", body: JSON.stringify({ isActive }) }),
 };
 
 // Admin stats
@@ -153,6 +158,10 @@ export const pumpApi = {
     apiRequest<Pump>(`/admin/pumps/${id}`, { method: "PUT", body: JSON.stringify(data) }),
   delete: async (id: number): Promise<void> =>
     apiRequest<void>(`/admin/pumps/${id}`, { method: "DELETE" }),
+  hardDelete: async (id: number, reason: string): Promise<void> =>
+    apiRequest<void>(`/admin/pumps/${id}?force=true`, { method: "DELETE", body: JSON.stringify({ reason }) }),
+  reassign: async (id: number, operatorId: number): Promise<Pump> =>
+    apiRequest<Pump>(`/admin/pumps/${id}/assign`, { method: "PATCH", body: JSON.stringify({ operatorId }) }),
   getAssigned: async (): Promise<Pump[]> => apiRequest<Pump[]>("/user/assigned-pumps"),
 };
 
@@ -207,6 +216,8 @@ export const adminLandApi = {
     apiRequest<void>(`/admin/lands/${id}`, { method: "DELETE" }),
   search: async (pumpId: number, query: string): Promise<Land[]> =>
     apiRequest<Land[]>(`/admin/lands/search?pumpId=${pumpId}&query=${encodeURIComponent(query)}`),
+  getDuplicateLandmarks: async (): Promise<Land[]> =>
+    apiRequest<Land[]>("/admin/lands/duplicate-landmarks"),
 };
 
 // Farmer-Land Assignment API
@@ -307,6 +318,57 @@ export const dashboardApi = {
   },
 };
 
+// Season Type catalog (admin-managed; operators read the active list)
+export const seasonTypeApi = {
+  getActive: async (): Promise<SeasonType[]> => apiRequest<SeasonType[]>("/season-types"),
+};
+
+export const adminSeasonTypeApi = {
+  getAll: async (): Promise<SeasonType[]> => apiRequest<SeasonType[]>("/admin/season-types"),
+  create: async (data: CreateSeasonTypeRequest): Promise<SeasonType> =>
+    apiRequest<SeasonType>("/admin/season-types", { method: "POST", body: JSON.stringify(data) }),
+  update: async (id: number, data: UpdateSeasonTypeRequest): Promise<SeasonType> =>
+    apiRequest<SeasonType>(`/admin/season-types/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
+  delete: async (id: number): Promise<void> =>
+    apiRequest<void>(`/admin/season-types/${id}`, { method: "DELETE" }),
+};
+
+// Aggregated cross-cutting admin dashboard
+export const adminDashboardApi = {
+  getAggregated: async (groupBy: AdminDashboardGroupBy, year?: number, pumpId?: number): Promise<AdminDashboardResponse> => {
+    const params = new URLSearchParams({ groupBy });
+    if (year) params.append("year", String(year));
+    if (pumpId) params.append("pumpId", String(pumpId));
+    return apiRequest<AdminDashboardResponse>(`/admin/dashboard?${params}`);
+  },
+};
+
+// Admin override authority — each action requires a reason, each is audited
+export const adminOverrideApi = {
+  adjustDue: async (dueId: number, data: AdjustDueRequest): Promise<DueEntry> =>
+    apiRequest<DueEntry>(`/admin/dues/${dueId}/adjust`, { method: "POST", body: JSON.stringify(data) }),
+  reversePayment: async (paymentId: number, data: ReasonRequest): Promise<Payment> =>
+    apiRequest<Payment>(`/admin/payments/${paymentId}/reverse`, { method: "POST", body: JSON.stringify(data) }),
+  forceRemoveFarmer: async (seasonId: number, farmerId: number, data: ReasonRequest): Promise<void> =>
+    apiRequest<void>(`/admin/seasons/${seasonId}/farmers/${farmerId}?force=true`, {
+      method: "DELETE", body: JSON.stringify(data),
+    }),
+  hardDeleteSeason: async (seasonId: number, data: ReasonRequest): Promise<void> =>
+    apiRequest<void>(`/admin/seasons/${seasonId}?force=true`, { method: "DELETE", body: JSON.stringify(data) }),
+};
+
+// Read-only audit log
+export const auditLogApi = {
+  search: async (params: AuditLogSearchParams): Promise<AuditLogEntry[]> => {
+    const qs = new URLSearchParams();
+    if (params.actorId) qs.append("actorId", String(params.actorId));
+    if (params.entityType) qs.append("entityType", params.entityType);
+    if (params.from) qs.append("from", params.from);
+    if (params.to) qs.append("to", params.to);
+    return apiRequest<AuditLogEntry[]>(`/admin/audit?${qs}`);
+  },
+};
+
 // Season Enrollment API
 export const enrollmentApi = {
   /** Farmers enrolled in a specific season */
@@ -336,25 +398,22 @@ export const enrollmentApi = {
     apiRequest<void>(`/seasons/${seasonId}/enrollments/${farmerId}`, { method: "DELETE" }),
 };
 
-// Reports API
+// Reports API (payment receipt is still server-rendered — out of scope for the invoice rework)
 export const reportsApi = {
-  downloadInvoice: async (farmerId: number): Promise<Blob> => {
+  downloadPaymentReceipt: async (farmerId: number): Promise<Blob> => {
     const token = tokenManager.getToken();
-    const response = await fetch(`${API_BASE_URL}/reports/farmer/${farmerId}/invoice`, {
+    const response = await fetch(`${API_BASE_URL}/reports/farmer/${farmerId}/payment-receipt`, {
       headers: { Authorization: token || "" },
     });
-    if (!response.ok) throw new Error("Failed to download invoice");
+    if (!response.ok) throw new Error("Failed to download receipt");
     return response.blob();
   },
-  downloadJasperInvoice: async (farmerId: number, season: string, year: number): Promise<Blob> => {
-    const token = tokenManager.getToken();
-    const response = await fetch(
-      `${API_BASE_URL}/reports/invoice/farmer/${farmerId}?season=${encodeURIComponent(season)}&year=${year}`,
-      { headers: { Authorization: token || "" } }
-    );
-    if (!response.ok) throw new Error("Failed to generate invoice");
-    return response.blob();
-  },
+};
+
+// Invoice API — JSON only; the PDF is built client-side, see lib/invoice/buildInvoicePdf.ts
+export const invoiceApi = {
+  get: async (paymentId: number): Promise<InvoiceResponse> =>
+    apiRequest<InvoiceResponse>(`/invoices/${paymentId}`),
 };
 
 // Settings API

@@ -19,6 +19,9 @@ const adminNavItems = [
   { label: "ব্যবহারকারী", path: "/admin/users" },
   { label: "কৃষক", path: "/admin/farmers" },
   { label: "জমি", path: "/admin/lands" },
+  { label: "মৌসুম", path: "/admin/seasons" },
+  { label: "মৌসুম ধরন", path: "/admin/season-types" },
+  { label: "অডিট লগ", path: "/admin/audit-log" },
   { label: "সেটিংস", path: "/admin/settings" },
 ];
 
@@ -103,7 +106,10 @@ const AdminFarmerList = () => {
                         <TableCell className="hidden lg:table-cell text-xs text-muted-foreground">{f.pumpName || `#${f.pumpId}`}</TableCell>
                         <TableCell>{f.mobile}</TableCell>
                         <TableCell>
-                          <Button size="sm" variant="outline" onClick={() => navigate(`/user/farmers/${f.id}`)}>বিস্তারিত</Button>
+                          <div className="flex gap-1">
+                            <Button size="sm" variant="outline" onClick={() => navigate(`/user/farmers/${f.id}`)}>বিস্তারিত</Button>
+                            <Button size="sm" variant="outline" onClick={() => navigate(`/admin/farmers/${f.id}/ledger`)}>লেজার</Button>
+                          </div>
                         </TableCell>
                       </TableRow>
                     ))}

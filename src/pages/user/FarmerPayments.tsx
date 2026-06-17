@@ -15,7 +15,8 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
-import { farmerApi, paymentApi, reportsApi } from "@/lib/api/client";
+import { farmerApi, paymentApi, invoiceApi } from "@/lib/api/client";
+import { buildInvoicePdf } from "@/lib/invoice/buildInvoicePdf";
 import type { Farmer, Payment } from "@/lib/api/types";
 import { Plus, Loader2, Download, Pencil, Trash2 } from "lucide-react";
 import AppNavbar from "@/components/AppNavbar";
@@ -44,7 +45,7 @@ const FarmerPayments = () => {
   const [payments, setPayments] = useState<Payment[]>([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
-  const [downloading, setDownloading] = useState(false);
+  const [downloadingId, setDownloadingId] = useState<number | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<{ id: number; amount: number; reason: string } | null>(null);
   const [deleting, setDeleting] = useState<Payment | null>(null);
@@ -104,18 +105,14 @@ const FarmerPayments = () => {
     finally { setBusy(false); }
   };
 
-  const handleDownloadInvoice = async () => {
-    setDownloading(true);
+  const handleDownloadInvoice = async (payment: Payment) => {
+    setDownloadingId(payment.id);
     try {
-      const blob = await reportsApi.downloadInvoice(parseInt(farmerId!));
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url; a.download = `invoice-${farmer?.farmerCode || farmerId}.pdf`;
-      document.body.appendChild(a); a.click();
-      window.URL.revokeObjectURL(url); document.body.removeChild(a);
+      const data = await invoiceApi.get(payment.id);
+      buildInvoicePdf(data).save(`invoice-${data.invoiceNo}.pdf`);
       toast({ title: "Invoice downloaded" });
-    } catch { toast({ title: "Error", description: "Failed to download invoice", variant: "destructive" }); }
-    finally { setDownloading(false); }
+    } catch (e: any) { toast({ title: "Error", description: e.message || "Failed to download invoice", variant: "destructive" }); }
+    finally { setDownloadingId(null); }
   };
 
   const methodLabel: Record<string, string> = { CASH: "নগদ", BANK: "ব্যাংক", MOBILE_BANKING: "মোবাইল ব্যাংকিং" };
@@ -135,9 +132,6 @@ const FarmerPayments = () => {
         rightContent={
           <div className="flex flex-wrap gap-2 items-center">
             <PumpSelector />
-            <Button size="sm" variant="outline" onClick={handleDownloadInvoice} disabled={downloading}>
-              {downloading ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <Download className="w-4 h-4 mr-1" />}ইনভয়েস
-            </Button>
             <Button size="sm" onClick={() => setShowForm(!showForm)}><Plus className="w-4 h-4 mr-1" />পেমেন্ট</Button>
           </div>
         }
@@ -197,6 +191,9 @@ const FarmerPayments = () => {
                         <TableCell className="hidden md:table-cell font-mono text-xs">{p.transactionReference || "-"}</TableCell>
                         <TableCell>
                           <div className="flex gap-1">
+                            <Button size="icon" variant="outline" className="h-8 w-8" title="ইনভয়েস" onClick={() => handleDownloadInvoice(p)} disabled={downloadingId === p.id}>
+                              {downloadingId === p.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
+                            </Button>
                             <Button size="icon" variant="outline" className="h-8 w-8" onClick={() => setEditing({ id: p.id, amount: p.amount, reason: "" })}><Pencil className="w-3.5 h-3.5" /></Button>
                             <Button size="icon" variant="outline" className="h-8 w-8 text-destructive" onClick={() => setDeleting(p)}><Trash2 className="w-3.5 h-3.5" /></Button>
                           </div>

@@ -132,6 +132,7 @@ export interface LedgerAllocation {
 }
 
 export interface SeasonLedger {
+  dueId: number;
   seasonId: number;
   seasonKind?: SeasonKind;
   seasonName: string;
@@ -186,6 +187,9 @@ export interface Payment {
   transactionReference?: string;
   paymentType: "PAYMENT" | "ADJUSTMENT" | "DEDUCTION";
   adjustmentReason?: string;
+  isReversed?: boolean;
+  reversedAt?: string;
+  reversedReason?: string;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -378,5 +382,102 @@ export interface CreateSettingRequest {
   key: string;
   value: string;
   category: string;
+}
+
+// ── Admin module: season-type catalog, dashboard, overrides, audit log ──────────
+
+export interface SeasonType {
+  id: number;
+  code: SeasonKind;
+  nameEnglish: string;
+  nameBengali: string;
+  description?: string;
+  isActive?: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface CreateSeasonTypeRequest {
+  code: string;
+  nameEnglish: string;
+  nameBengali: string;
+  description?: string;
+}
+
+export interface UpdateSeasonTypeRequest {
+  nameEnglish?: string;
+  nameBengali?: string;
+  description?: string;
+  isActive?: boolean;
+}
+
+export type AdminDashboardGroupBy = "pump" | "operator" | "year" | "seasonType";
+
+export interface AdminDashboardRow {
+  key: string;
+  label: string;
+  totalBilled: number;
+  totalCollected: number;
+  totalOutstanding: number;
+  collectionRate?: number;
+}
+
+export interface AdminDashboardResponse {
+  groupBy: AdminDashboardGroupBy;
+  rows: AdminDashboardRow[];
+  systemWideOutstanding: number;
+}
+
+export interface AdjustDueRequest {
+  newAmount?: number;
+  waive?: boolean;
+  reason: string;
+}
+
+export interface ReasonRequest {
+  reason: string;
+}
+
+export interface DueEntry {
+  id: number;
+  amount: number;
+  remaining: number;
+}
+
+export interface AuditLogEntry {
+  id: number;
+  actorId?: number;
+  actorName: string;
+  role: "ADMIN" | "USER";
+  adminImpersonation: boolean;
+  actionType: string;
+  tableName: string;
+  recordId?: number;
+  oldValue?: string;
+  newValue?: string;
+  reason?: string;
+  timestamp: string;
+}
+
+export interface AuditLogSearchParams {
+  actorId?: number;
+  entityType?: string;
+  from?: string;
+  to?: string;
+}
+
+// ── Invoice: backend returns this JSON, the PDF is rendered client-side ──────────
+
+export interface InvoiceResponse {
+  invoiceNo: string;
+  issuedAt: string;
+  pump: { name: string; identifier: string };
+  operator: { name: string };
+  season: { name?: string; type?: string; year?: number };
+  farmer: { name: string; identifier: string };
+  lands: { landmarkNumber: string; area: string }[];
+  payment: { amount: number; paidAt: string; method: string };
+  allocations: { seasonName: string; dueDate: string; applied: number; remainingAfter: number }[];
+  balances: { totalDue: number; totalPaid: number; outstanding: number; creditBalance: number };
 }
 

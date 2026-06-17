@@ -5,6 +5,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
@@ -20,6 +22,9 @@ const adminNavItems = [
   { label: "পাম্প", path: "/admin/pumps" },
   { label: "ব্যবহারকারী", path: "/admin/users" },
   { label: "কৃষক", path: "/admin/farmers" },
+  { label: "মৌসুম", path: "/admin/seasons" },
+  { label: "মৌসুম ধরন", path: "/admin/season-types" },
+  { label: "অডিট লগ", path: "/admin/audit-log" },
   { label: "সেটিংস", path: "/admin/settings" },
 ];
 
@@ -76,6 +81,15 @@ const UserList = () => {
     finally { setBusy(false); }
   };
 
+  const handleToggleStatus = async (u: User) => {
+    setBusy(true);
+    try {
+      await userApi.setStatus(u.id, !(u.isActive ?? true));
+      await fetchUsers();
+    } catch (e: any) { toast({ title: "Error", description: e.message, variant: "destructive" }); }
+    finally { setBusy(false); }
+  };
+
   if (isLoading) {
     return <div className="min-h-screen flex items-center justify-center"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div></div>;
   }
@@ -116,6 +130,7 @@ const UserList = () => {
                       <TableHead>Full Name</TableHead>
                       <TableHead className="hidden md:table-cell">Email</TableHead>
                       <TableHead className="hidden md:table-cell">Mobile</TableHead>
+                      <TableHead>Status</TableHead>
                       <TableHead>Action</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -126,6 +141,12 @@ const UserList = () => {
                         <TableCell className="font-medium">{u.fullName}</TableCell>
                         <TableCell className="hidden md:table-cell">{u.email}</TableCell>
                         <TableCell className="hidden md:table-cell">{u.mobile}</TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            <Switch checked={u.isActive ?? true} onCheckedChange={() => handleToggleStatus(u)} disabled={busy} />
+                            <Badge variant={(u.isActive ?? true) ? "default" : "secondary"}>{(u.isActive ?? true) ? "Active" : "Disabled"}</Badge>
+                          </div>
+                        </TableCell>
                         <TableCell>
                           <div className="flex gap-1">
                             <Button size="icon" variant="outline" className="h-8 w-8" onClick={() => setEditing({ ...u })}><Pencil className="w-3.5 h-3.5" /></Button>

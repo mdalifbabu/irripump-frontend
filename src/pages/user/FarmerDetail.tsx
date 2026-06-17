@@ -12,7 +12,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { usePumpContext } from "@/contexts/PumpContext";
-import { farmerApi, assignmentApi, paymentApi, unitPriceApi, seasonApi, reportsApi } from "@/lib/api/client";
+import { farmerApi, assignmentApi, paymentApi, unitPriceApi, seasonApi, invoiceApi } from "@/lib/api/client";
+import { buildInvoicePdf } from "@/lib/invoice/buildInvoicePdf";
 import type { Farmer, FarmerLandAssignment, Payment, UnitPrice, Season, FarmerDetailResponse } from "@/lib/api/types";
 import { CreditCard, Map, Phone, Mail, MapPin, Pencil, Trash2, Loader2, TrendingUp, TrendingDown, FileDown } from "lucide-react";
 import AppNavbar from "@/components/AppNavbar";
@@ -160,18 +161,17 @@ const FarmerDetail = () => {
   };
 
   const handleDownloadInvoice = async () => {
-    if (!farmer) return;
+    // Invoices are per-payment now (no more server-rendered binary) — default to the
+    // farmer's most recent payment, which is what "download invoice" meant here before.
+    const latestPayment = payments[0];
+    if (!latestPayment) {
+      toast({ title: "কোনো পেমেন্ট নেই", description: "ইনভয়েস তৈরি করার জন্য অন্তত একটি পেমেন্ট প্রয়োজন", variant: "destructive" });
+      return;
+    }
     setDownloading(true);
     try {
-      const blob = await reportsApi.downloadJasperInvoice(farmer.id, season, year);
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `invoice-${farmer.farmerCode}-${season}-${year}.pdf`;
-      document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
+      const data = await invoiceApi.get(latestPayment.id);
+      buildInvoicePdf(data).save(`invoice-${data.invoiceNo}.pdf`);
       toast({ title: "Invoice downloaded" });
     } catch (e: any) {
       toast({ title: "Error", description: e.message || "Failed to download invoice", variant: "destructive" });
