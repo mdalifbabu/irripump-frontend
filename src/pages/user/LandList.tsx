@@ -36,6 +36,7 @@ const schema = z.object({
   sizeBigha: z.number().min(0, "বিঘা ≥ 0"),
   sizeShatak: z.number().min(0, "শতক ≥ 0"),
   description: z.string().optional(),
+  tag: z.string().optional(),
 });
 type FormData = z.infer<typeof schema>;
 
@@ -53,6 +54,8 @@ const LandList = () => {
   const [assigningLand, setAssigningLand] = useState<Land | null>(null);
   const [selectedFarmerId, setSelectedFarmerId] = useState<string>("");
   const [unassigning, setUnassigning] = useState<FarmerLandAssignment | null>(null);
+  const [tagPromptLand, setTagPromptLand] = useState<Land | null>(null);
+  const [tagPromptValue, setTagPromptValue] = useState("");
   const navigate = useNavigate();
   const { toast } = useToast();
   const { isAuthenticated, isLoading } = useAuth();
@@ -60,7 +63,7 @@ const LandList = () => {
 
   const form = useForm<FormData>({
     resolver: zodResolver(schema),
-    defaultValues: { landIdentificationNumber: "", landmarkNumber: "", sizeBigha: 0, sizeShatak: 0, description: "" },
+    defaultValues: { landIdentificationNumber: "", landmarkNumber: "", sizeBigha: undefined, sizeShatak: undefined, description: "", tag: "" },
   });
 
   const currentSeasonId = seasons.find(s => s.seasonName === season && s.year === year)?.id ?? null;
@@ -101,9 +104,9 @@ const LandList = () => {
     if (!pumpId) return;
     setSubmitting(true);
     try {
-      await landApi.create({ ...data, pumpId });
+      await landApi.create({ ...data, pumpId, tag: data.tag || undefined });
       toast({ title: "সফল", description: "জমি তৈরি হয়েছে" });
-      form.reset({ landIdentificationNumber: "", landmarkNumber: "", sizeBigha: 0, sizeShatak: 0, description: "" });
+      form.reset({ landIdentificationNumber: "", landmarkNumber: "", sizeBigha: 0, sizeShatak: 0, description: "", tag: "" });
       setShowForm(false);
       fetchLands();
     } catch (e: any) {
@@ -121,9 +124,22 @@ const LandList = () => {
         sizeBigha: editing.sizeBigha,
         sizeShatak: editing.sizeShatak,
         description: editing.description,
+        tag: editing.tag,
       });
       toast({ title: "আপডেট সফল" });
       setEditing(null);
+      fetchLands();
+    } catch (e: any) { toast({ title: "ত্রুটি", description: e.message, variant: "destructive" }); }
+    finally { setBusy(false); }
+  };
+
+  const handleTagUpdate = async () => {
+    if (!tagPromptLand) return;
+    setBusy(true);
+    try {
+      await landApi.update(tagPromptLand.id, { tag: tagPromptValue });
+      toast({ title: "ট্যাগ আপডেট হয়েছে" });
+      setTagPromptLand(null);
       fetchLands();
     } catch (e: any) { toast({ title: "ত্রুটি", description: e.message, variant: "destructive" }); }
     finally { setBusy(false); }
@@ -152,9 +168,13 @@ const LandList = () => {
         year,
       });
       toast({ title: "সফল", description: "জমি বরাদ্দ হয়েছে" });
+      const justAssigned = assigningLand;
       setAssigningLand(null);
       setSelectedFarmerId("");
       fetchAssignments();
+      // Prompt to update tag since land now has a single farmer assignment
+      setTagPromptLand(justAssigned);
+      setTagPromptValue(justAssigned.tag ?? "");
     } catch (e: any) { toast({ title: "ত্রুটি", description: e.message, variant: "destructive" }); }
     finally { setBusy(false); }
   };
@@ -206,14 +226,17 @@ const LandList = () => {
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     <FormField control={form.control} name="sizeBigha" render={({ field }) => (
-                      <FormItem><FormLabel>আকার (বিঘা)</FormLabel><FormControl><Input type="number" step="0.01" {...field} onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)} /></FormControl><FormMessage /></FormItem>
+                      <FormItem><FormLabel>আকার (বিঘা)</FormLabel><FormControl><Input type="number" step="0.01" {...field} onChange={(e) => field.onChange(e.target.value === "" ? undefined : parseFloat(e.target.value))} /></FormControl><FormMessage /></FormItem>
                     )} />
                     <FormField control={form.control} name="sizeShatak" render={({ field }) => (
-                      <FormItem><FormLabel>আকার (শতক)</FormLabel><FormControl><Input type="number" step="0.01" {...field} onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)} /></FormControl><FormMessage /></FormItem>
+                      <FormItem><FormLabel>আকার (শতক)</FormLabel><FormControl><Input type="number" step="0.01" {...field} onChange={(e) => field.onChange(e.target.value === "" ? undefined : parseFloat(e.target.value))} /></FormControl><FormMessage /></FormItem>
                     )} />
                   </div>
                   <FormField control={form.control} name="description" render={({ field }) => (
                     <FormItem><FormLabel>বিবরণ</FormLabel><FormControl><Input placeholder="ঐচ্ছিক বিবরণ" {...field} /></FormControl><FormMessage /></FormItem>
+                  )} />
+                  <FormField control={form.control} name="tag" render={({ field }) => (
+                    <FormItem><FormLabel>ট্যাগ / ফ্ল্যাগ</FormLabel><FormControl><Input placeholder="অনুসন্ধানযোগ্য লেবেল (ঐচ্ছিক)" {...field} /></FormControl><FormMessage /></FormItem>
                   )} />
                   <div className="flex gap-2 justify-end">
                     <Button type="button" variant="outline" onClick={() => setShowForm(false)}>বাতিল</Button>
@@ -247,6 +270,7 @@ const LandList = () => {
                       <TableHead>পরিচয় নম্বর</TableHead>
                       <TableHead>দাগ/খতিয়ান</TableHead>
                       <TableHead>মোট শতক</TableHead>
+                      <TableHead>ট্যাগ</TableHead>
                       <TableHead>বরাদ্দ অবস্থা</TableHead>
                       <TableHead>কৃষক</TableHead>
                       <TableHead>বরাদ্দ</TableHead>
@@ -260,7 +284,8 @@ const LandList = () => {
                         <TableRow key={land.id}>
                           <TableCell className="font-medium">{land.landIdentificationNumber}</TableCell>
                           <TableCell>{land.landmarkNumber}</TableCell>
-                          <TableCell className="font-bold text-primary">{totalShatak.toFixed(0)} শতক</TableCell>
+                          <TableCell><span className="font-bold text-primary">{totalShatak.toFixed(1)} শতক</span><br /><span className="text-xs text-muted-foreground">{(totalShatak / 33).toFixed(3)} বিঘা</span></TableCell>
+                          <TableCell className="text-sm text-muted-foreground">{land.tag ?? "-"}</TableCell>
                           <TableCell>
                             <Badge variant={asgn ? "default" : "outline"}>
                               {asgn ? "বরাদ্দ" : "খালি"}
@@ -315,6 +340,7 @@ const LandList = () => {
                       <TableHead>বিঘা</TableHead>
                       <TableHead>শতক</TableHead>
                       <TableHead>মোট শতক</TableHead>
+                      <TableHead>ট্যাগ</TableHead>
                       <TableHead>অবস্থা</TableHead>
                       <TableHead>অ্যাকশন</TableHead>
                     </TableRow>
@@ -328,7 +354,8 @@ const LandList = () => {
                           <TableCell>{land.landmarkNumber}</TableCell>
                           <TableCell>{land.sizeBigha?.toFixed(2)}</TableCell>
                           <TableCell>{land.sizeShatak?.toFixed(2)}</TableCell>
-                          <TableCell className="font-bold text-primary">{totalShatak.toFixed(0)} শতক</TableCell>
+                          <TableCell><span className="font-bold text-primary">{totalShatak.toFixed(1)} শতক</span><br /><span className="text-xs text-muted-foreground">{(totalShatak / 33).toFixed(3)} বিঘা</span></TableCell>
+                          <TableCell className="text-sm text-muted-foreground">{land.tag ?? "-"}</TableCell>
                           <TableCell>
                             <Badge variant={land.isActive ? "default" : "secondary"}>
                               {land.isActive ? "সক্রিয়" : "নিষ্ক্রিয়"}
@@ -364,16 +391,40 @@ const LandList = () => {
               <div><Label>পরিচয় নম্বর</Label><Input value={editing.landIdentificationNumber} onChange={(e) => setEditing({ ...editing, landIdentificationNumber: e.target.value })} /></div>
               <div><Label>দাগ/খতিয়ান নম্বর</Label><Input value={editing.landmarkNumber} onChange={(e) => setEditing({ ...editing, landmarkNumber: e.target.value })} /></div>
               <div className="grid grid-cols-2 gap-3">
-                <div><Label>বিঘা</Label><Input type="number" step="0.01" value={editing.sizeBigha} onChange={(e) => setEditing({ ...editing, sizeBigha: parseFloat(e.target.value) || 0 })} /></div>
-                <div><Label>শতক</Label><Input type="number" step="0.01" value={editing.sizeShatak} onChange={(e) => setEditing({ ...editing, sizeShatak: parseFloat(e.target.value) || 0 })} /></div>
+                <div><Label>বিঘা</Label><Input type="number" step="0.01" value={editing.sizeBigha ?? ""} onChange={(e) => setEditing({ ...editing, sizeBigha: e.target.value === "" ? undefined : parseFloat(e.target.value) })} /></div>
+                <div><Label>শতক</Label><Input type="number" step="0.01" value={editing.sizeShatak ?? ""} onChange={(e) => setEditing({ ...editing, sizeShatak: e.target.value === "" ? undefined : parseFloat(e.target.value) })} /></div>
               </div>
               <div><Label>মোট শতক (গণনা)</Label><p className="text-sm font-bold text-primary">{((editing.sizeBigha ?? 0) * 33 + (editing.sizeShatak ?? 0)).toFixed(0)} শতক</p></div>
               <div><Label>বিবরণ</Label><Input value={editing.description ?? ""} onChange={(e) => setEditing({ ...editing, description: e.target.value })} /></div>
+              <div><Label>ট্যাগ / ফ্ল্যাগ</Label><Input value={editing.tag ?? ""} onChange={(e) => setEditing({ ...editing, tag: e.target.value })} placeholder="অনুসন্ধানযোগ্য লেবেল" /></div>
             </div>
           )}
           <DialogFooter>
             <Button variant="outline" onClick={() => setEditing(null)}>বাতিল</Button>
             <Button onClick={handleUpdate} disabled={busy}>{busy && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}সংরক্ষণ</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Tag update prompt — shown after a land is singly assigned */}
+      <Dialog open={!!tagPromptLand} onOpenChange={(o) => { if (!o) setTagPromptLand(null); }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>ট্যাগ আপডেট করবেন?</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            জমি <strong>{tagPromptLand?.landIdentificationNumber}</strong> একজন কৃষকের কাছে বরাদ্দ হয়েছে।
+            এই জমির জন্য একটি অনুসন্ধানযোগ্য ট্যাগ যোগ করতে পারেন।
+          </p>
+          <div>
+            <Label>ট্যাগ</Label>
+            <Input value={tagPromptValue} onChange={(e) => setTagPromptValue(e.target.value)} placeholder="যেমন: উত্তর মাঠ, সেচ এলাকা ক" />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setTagPromptLand(null)}>এড়িয়ে যান</Button>
+            <Button onClick={handleTagUpdate} disabled={busy || !tagPromptValue.trim()}>
+              {busy && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}ট্যাগ সংরক্ষণ
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

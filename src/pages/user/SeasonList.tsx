@@ -11,9 +11,9 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { usePumpContext } from "@/contexts/PumpContext";
-import { seasonApi } from "@/lib/api/client";
+import { seasonApi, enrollmentApi } from "@/lib/api/client";
 import type { Season, CreateSeasonRequest } from "@/lib/api/types";
-import { Plus, Star, Trash2, RefreshCw, CalendarDays } from "lucide-react";
+import { Plus, Star, Trash2, RefreshCw, CalendarDays, Loader2, Shuffle } from "lucide-react";
 import AppNavbar from "@/components/AppNavbar";
 import PumpSelector from "@/components/PumpSelector";
 
@@ -31,16 +31,9 @@ const seasonKindOptions: { value: CreateSeasonRequest["seasonKind"]; label: stri
 ];
 
 const emptyForm: CreateSeasonRequest = {
-  pumpId: 0,
-  seasonKind: "BORO",
-  seasonName: "",
-  seasonNameBengali: "",
-  description: "",
-  startDate: "",
-  endDate: "",
-  year: new Date().getFullYear(),
-  isActive: true,
-  isCurrent: false,
+  pumpId: 0, seasonKind: "BORO", seasonName: "", seasonNameBengali: "",
+  description: "", startDate: "", endDate: "", year: new Date().getFullYear(),
+  isActive: true, isCurrent: false,
 };
 
 export default function SeasonList() {
@@ -51,24 +44,31 @@ export default function SeasonList() {
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState<Season | null>(null);
   const [busy, setBusy] = useState(false);
+
+  // Magic Button state
+  const [showTransfer, setShowTransfer] = useState(false);
+  const [transferTarget, setTransferTarget] = useState<Season | null>(null);
+  const [transferSourceId, setTransferSourceId] = useState<string>("");
+  const [transferring, setTransferring] = useState(false);
+
   const navigate = useNavigate();
   const { toast } = useToast();
   const { isAuthenticated, isLoading } = useAuth();
-  const { pumpId, refreshSeasons } = usePumpContext();
+  const { pumpId, year, seasons: contextSeasons, refreshSeasons } = usePumpContext();
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) navigate("/auth");
   }, [isLoading, isAuthenticated, navigate]);
 
   useEffect(() => {
-    if (pumpId) fetchSeasons();
-  }, [pumpId]);
+    if (pumpId && year) fetchSeasons();
+  }, [pumpId, year]);
 
   const fetchSeasons = async () => {
-    if (!pumpId) return;
+    if (!pumpId || !year) return;
     setLoading(true);
     try {
-      const data = await seasonApi.getByPump(pumpId);
+      const data = await seasonApi.getByPumpAndYear(pumpId, year);
       setSeasons(data);
     } catch {
       toast({ title: "Error", description: "মৌসুম লোড করা যায়নি", variant: "destructive" });
@@ -78,7 +78,7 @@ export default function SeasonList() {
   };
 
   const openForm = () => {
-    setForm({ ...emptyForm, pumpId: pumpId ?? 0, year: new Date().getFullYear() });
+    setForm({ ...emptyForm, pumpId: pumpId ?? 0, year });
     setShowForm(true);
   };
 
@@ -128,12 +128,35 @@ export default function SeasonList() {
     }
   };
 
+  const openTransfer = (targetSeason: Season) => {
+    setTransferTarget(targetSeason);
+    setTransferSourceId("");
+    setShowTransfer(true);
+  };
+
+  const handleTransfer = async () => {
+    if (!transferTarget || !transferSourceId) return;
+    setTransferring(true);
+    try {
+      const result = await enrollmentApi.transferFrom(transferTarget.id, Number(transferSourceId));
+      toast({
+        title: "স্থানান্তর সম্পন্ন",
+        description: `${result.transferredFarmers}জন কৃষক ও তাদের জমি "${transferTarget.seasonNameBengali}"-এ স্থানান্তরিত হয়েছে।`,
+      });
+      setShowTransfer(false);
+      fetchSeasons();
+    } catch (e: any) {
+      toast({ title: "Error", description: e.message, variant: "destructive" });
+    } finally {
+      setTransferring(false);
+    }
+  };
+
+  // All seasons across all years for the source picker
+  const allPumpSeasons = contextSeasons.filter(s => transferTarget && s.id !== transferTarget.id);
+
   if (isLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary" />
-      </div>
-    );
+    return <div className="min-h-screen flex items-center justify-center"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary" /></div>;
   }
 
   return (
@@ -142,40 +165,31 @@ export default function SeasonList() {
         title="মৌসুম ব্যবস্থাপনা"
         subtitle="Season Management"
         navItems={navItems}
-        rightContent={
-          <div className="flex flex-wrap gap-2 items-center">
-            <PumpSelector />
-            <Button size="sm" onClick={openForm} disabled={!pumpId}>
-              <Plus className="w-4 h-4 mr-1" />মৌসুম
-            </Button>
-          </div>
-        }
+        rightContent={<PumpSelector />}
       />
 
       <main className="max-w-4xl mx-auto p-4 md:p-6 space-y-4">
         <div className="flex items-center justify-between">
-          <p className="text-sm text-muted-foreground">{seasons.length}টি মৌসুম</p>
-          <Button variant="outline" size="sm" onClick={fetchSeasons}>
-            <RefreshCw className={`w-4 h-4 mr-1 ${loading ? "animate-spin" : ""}`} />
-            রিফ্রেশ
-          </Button>
+          <p className="text-sm text-muted-foreground">{year} সালে {seasons.length}টি মৌসুম</p>
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" onClick={fetchSeasons}>
+              <RefreshCw className={`w-4 h-4 mr-1 ${loading ? "animate-spin" : ""}`} />রিফ্রেশ
+            </Button>
+            <Button size="sm" onClick={openForm} disabled={!pumpId}>
+              <Plus className="w-4 h-4 mr-1" />নতুন মৌসুম
+            </Button>
+          </div>
         </div>
 
         {!pumpId ? (
-          <Card>
-            <CardContent className="py-12 text-center text-muted-foreground">
-              একটি পাম্প নির্বাচন করুন
-            </CardContent>
-          </Card>
+          <Card><CardContent className="py-12 text-center text-muted-foreground">একটি পাম্প নির্বাচন করুন</CardContent></Card>
         ) : loading ? (
-          <div className="flex justify-center py-12">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
-          </div>
+          <div className="flex justify-center py-12"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" /></div>
         ) : seasons.length === 0 ? (
           <Card>
             <CardContent className="py-12 text-center">
               <CalendarDays className="w-10 h-10 mx-auto mb-3 text-muted-foreground/40" />
-              <p className="text-muted-foreground">কোনো মৌসুম নেই।</p>
+              <p className="text-muted-foreground">{year} সালে কোনো মৌসুম নেই।</p>
               <Button className="mt-4" onClick={openForm}><Plus className="w-4 h-4 mr-1" />প্রথম মৌসুম তৈরি করুন</Button>
             </CardContent>
           </Card>
@@ -199,12 +213,15 @@ export default function SeasonList() {
                     <p>শেষ: {s.endDate}</p>
                     {s.description && <p className="italic">{s.description}</p>}
                   </div>
-                  <div className="flex gap-2">
+                  <div className="flex gap-2 flex-wrap">
                     {!s.isCurrent && (
                       <Button size="sm" variant="outline" className="flex-1" onClick={() => handleSetCurrent(s)}>
                         <Star className="w-3.5 h-3.5 mr-1" />বর্তমান করুন
                       </Button>
                     )}
+                    <Button size="sm" variant="outline" className="flex-1" onClick={() => openTransfer(s)}>
+                      <Shuffle className="w-3.5 h-3.5 mr-1" />স্থানান্তর
+                    </Button>
                     <Button size="sm" variant="outline" className="text-destructive" onClick={() => setDeleting(s)}>
                       <Trash2 className="w-3.5 h-3.5" />
                     </Button>
@@ -219,16 +236,12 @@ export default function SeasonList() {
       {/* Create Season Dialog */}
       <Dialog open={showForm} onOpenChange={(o) => !o && setShowForm(false)}>
         <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>নতুন মৌসুম তৈরি করুন</DialogTitle>
-          </DialogHeader>
+          <DialogHeader><DialogTitle>নতুন মৌসুম তৈরি করুন</DialogTitle></DialogHeader>
           <div className="space-y-3 py-2">
             <div className="space-y-1">
               <Label>মৌসুমের ধরন *</Label>
               <Select value={form.seasonKind} onValueChange={(v) => setForm({ ...form, seasonKind: v as CreateSeasonRequest["seasonKind"] })}>
-                <SelectTrigger>
-                  <SelectValue placeholder="মৌসুমের ধরন নির্বাচন করুন" />
-                </SelectTrigger>
+                <SelectTrigger><SelectValue placeholder="মৌসুমের ধরন নির্বাচন করুন" /></SelectTrigger>
                 <SelectContent>
                   {seasonKindOptions.map((opt) => (
                     <SelectItem key={opt.value} value={opt.value as string}>{opt.label}</SelectItem>
@@ -239,46 +252,38 @@ export default function SeasonList() {
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
                 <Label>মৌসুমের নাম (ইংরেজি) *</Label>
-                <Input placeholder="যেমন: Boro" value={form.seasonName}
-                  onChange={(e) => setForm({ ...form, seasonName: e.target.value })} />
+                <Input placeholder="যেমন: Boro" value={form.seasonName} onChange={(e) => setForm({ ...form, seasonName: e.target.value })} />
               </div>
               <div className="space-y-1">
                 <Label>মৌসুমের নাম (বাংলা) *</Label>
-                <Input placeholder="যেমন: বোরো" value={form.seasonNameBengali}
-                  onChange={(e) => setForm({ ...form, seasonNameBengali: e.target.value })} />
+                <Input placeholder="যেমন: বোরো" value={form.seasonNameBengali} onChange={(e) => setForm({ ...form, seasonNameBengali: e.target.value })} />
               </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
                 <Label>শুরুর তারিখ *</Label>
-                <Input type="date" value={form.startDate}
-                  onChange={(e) => setForm({ ...form, startDate: e.target.value })} />
+                <Input type="date" value={form.startDate} onChange={(e) => setForm({ ...form, startDate: e.target.value })} />
               </div>
               <div className="space-y-1">
                 <Label>শেষের তারিখ *</Label>
-                <Input type="date" value={form.endDate}
-                  onChange={(e) => setForm({ ...form, endDate: e.target.value })} />
+                <Input type="date" value={form.endDate} onChange={(e) => setForm({ ...form, endDate: e.target.value })} />
               </div>
             </div>
             <div className="space-y-1">
               <Label>বছর *</Label>
-              <Input type="number" placeholder="2025" value={form.year}
-                onChange={(e) => setForm({ ...form, year: parseInt(e.target.value) || new Date().getFullYear() })} />
+              <Input type="number" value={form.year} onChange={(e) => setForm({ ...form, year: parseInt(e.target.value) || new Date().getFullYear() })} />
             </div>
             <div className="space-y-1">
               <Label>বিবরণ</Label>
-              <Input placeholder="ঐচ্ছিক বিবরণ" value={form.description ?? ""}
-                onChange={(e) => setForm({ ...form, description: e.target.value })} />
+              <Input placeholder="ঐচ্ছিক বিবরণ" value={form.description ?? ""} onChange={(e) => setForm({ ...form, description: e.target.value })} />
             </div>
             <div className="flex items-center gap-4">
               <label className="flex items-center gap-2 cursor-pointer">
-                <input type="checkbox" className="accent-primary" checked={form.isActive ?? true}
-                  onChange={(e) => setForm({ ...form, isActive: e.target.checked })} />
+                <input type="checkbox" className="accent-primary" checked={form.isActive ?? true} onChange={(e) => setForm({ ...form, isActive: e.target.checked })} />
                 <span className="text-sm">সক্রিয়</span>
               </label>
               <label className="flex items-center gap-2 cursor-pointer">
-                <input type="checkbox" className="accent-primary" checked={form.isCurrent ?? false}
-                  onChange={(e) => setForm({ ...form, isCurrent: e.target.checked })} />
+                <input type="checkbox" className="accent-primary" checked={form.isCurrent ?? false} onChange={(e) => setForm({ ...form, isCurrent: e.target.checked })} />
                 <span className="text-sm">বর্তমান মৌসুম</span>
               </label>
             </div>
@@ -286,7 +291,44 @@ export default function SeasonList() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowForm(false)}>বাতিল</Button>
             <Button onClick={handleSave} disabled={saving}>
-              {saving ? "সংরক্ষণ হচ্ছে..." : "সংরক্ষণ করুন"}
+              {saving ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />সংরক্ষণ হচ্ছে...</> : "সংরক্ষণ করুন"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Magic Button — Transfer Dialog */}
+      <Dialog open={showTransfer} onOpenChange={(o) => { if (!o) setShowTransfer(false); }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Shuffle className="w-4 h-4" />কৃষক স্থানান্তর
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <p className="text-sm text-muted-foreground">
+              একটি উৎস মৌসুম থেকে সকল কৃষক ও তাদের জমি বরাদ্দ{" "}
+              <strong>"{transferTarget?.seasonNameBengali}"</strong>-এ কপি করুন।
+              পেমেন্ট, বকেয়া বা হিসাব কপি হবে না — নতুন মৌসুম পরিষ্কার থাকবে।
+            </p>
+            <div className="space-y-1">
+              <Label>উৎস মৌসুম *</Label>
+              <Select value={transferSourceId} onValueChange={setTransferSourceId}>
+                <SelectTrigger><SelectValue placeholder="উৎস মৌসুম নির্বাচন করুন" /></SelectTrigger>
+                <SelectContent>
+                  {allPumpSeasons.map((s) => (
+                    <SelectItem key={s.id} value={String(s.id)}>
+                      {s.seasonNameBengali} ({s.year})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowTransfer(false)}>বাতিল</Button>
+            <Button onClick={handleTransfer} disabled={transferring || !transferSourceId}>
+              {transferring ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />স্থানান্তর হচ্ছে...</> : "স্থানান্তর করুন"}
             </Button>
           </DialogFooter>
         </DialogContent>

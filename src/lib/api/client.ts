@@ -8,12 +8,12 @@ import type {
   SeasonEnrollmentResponse, SeasonDashboard, LedgerResponse,
   SeasonType, CreateSeasonTypeRequest, UpdateSeasonTypeRequest,
   AdminDashboardGroupBy, AdminDashboardResponse, AdjustDueRequest, ReasonRequest,
-  DueEntry, AuditLogEntry, AuditLogSearchParams, InvoiceResponse,
+  DueEntry, AuditLogEntry, AuditLogSearchParams, InvoiceResponse, YearlyDashboard,
 } from "./types";
 
 //const API_BASE_URL = "http://localhost:8081/api";
-//const API_BASE_URL = "http://192.168.0.106:8081/api";
-const API_BASE_URL = "https://api.irripump.com/api";
+const API_BASE_URL = "http://192.168.0.106:8081/api";
+//const API_BASE_URL = "https://api.irripump.com/api";
 
 const TOKEN_KEY = "irripump_token";
 const REFRESH_TOKEN_KEY = "irripump_refresh_token";
@@ -316,6 +316,8 @@ export const dashboardApi = {
     if (year) params.append("year", String(year));
     return apiRequest<DashboardStats>(`/dashboard/pump/${pumpId}/stats?${params}`);
   },
+  getYearlySummary: async (pumpId: number, year: number): Promise<YearlyDashboard> =>
+    apiRequest<YearlyDashboard>(`/dashboard/pump/${pumpId}/year/${year}/summary`),
 };
 
 // Season Type catalog (admin-managed; operators read the active list)
@@ -396,6 +398,13 @@ export const enrollmentApi = {
   /** Remove a farmer from this season */
   unenroll: async (seasonId: number, farmerId: number): Promise<void> =>
     apiRequest<void>(`/seasons/${seasonId}/enrollments/${farmerId}`, { method: "DELETE" }),
+
+  /** Magic Button: transfer all farmers + land assignments from sourceSeasonId into targetSeasonId */
+  transferFrom: async (targetSeasonId: number, sourceSeasonId: number): Promise<{ transferredFarmers: number }> =>
+    apiRequest<{ transferredFarmers: number }>(
+      `/seasons/${targetSeasonId}/enrollments/transfer-from/${sourceSeasonId}`,
+      { method: "POST" }
+    ),
 };
 
 // Reports API (payment receipt is still server-rendered — out of scope for the invoice rework)

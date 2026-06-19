@@ -154,7 +154,7 @@ const UnitPriceList = () => {
                       <FormItem>
                         <FormLabel>মূল্য / শতক (৳)</FormLabel>
                         <FormControl>
-                          <Input type="number" {...field} onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)} />
+                          <Input type="number" {...field} onChange={(e) => field.onChange(e.target.value === "" ? undefined : parseFloat(e.target.value))} />
                         </FormControl>
                         {field.value > 0 && <p className="text-xs text-muted-foreground">= ৳{(field.value * 33).toLocaleString()}/বিঘা</p>}
                         <FormMessage />
@@ -230,7 +230,7 @@ const UnitPriceList = () => {
             <div className="space-y-3">
               <div>
                 <Label>মূল্য / শতক</Label>
-                <Input type="number" value={editing.pricePerShatak} onChange={(e) => setEditing({ ...editing, pricePerShatak: parseFloat(e.target.value) || 0 })} />
+                <Input type="number" value={editing.pricePerShatak} onChange={(e) => setEditing({ ...editing, pricePerShatak: e.target.value === "" ? undefined : parseFloat(e.target.value) })} />
                 {editing.pricePerShatak > 0 && <p className="text-xs text-muted-foreground mt-1">= ৳{(editing.pricePerShatak * 33).toLocaleString()}/বিঘা</p>}
               </div>
               <div><Label>কার্যকর শুরু</Label><Input type="date" value={editing.effectiveFrom} onChange={(e) => setEditing({ ...editing, effectiveFrom: e.target.value })} /></div>

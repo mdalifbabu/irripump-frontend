@@ -56,7 +56,7 @@ const FarmerPayments = () => {
 
   const form = useForm<FormData>({
     resolver: zodResolver(schema),
-    defaultValues: { amount: 0, paymentDate: new Date().toISOString().split("T")[0], paymentMethod: "CASH" as const, paymentType: "PAYMENT" as const, transactionReference: "" },
+    defaultValues: { amount: undefined, paymentDate: new Date().toISOString().split("T")[0], paymentMethod: "CASH" as const, paymentType: "PAYMENT" as const, transactionReference: "" },
   });
 
   useEffect(() => {
@@ -145,7 +145,7 @@ const FarmerPayments = () => {
               <Form {...form}>
                 <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <FormField control={form.control} name="amount" render={({ field }) => (<FormItem><FormLabel>পরিমাণ (৳)</FormLabel><FormControl><Input type="number" {...field} onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)} /></FormControl><FormMessage /></FormItem>)} />
+                    <FormField control={form.control} name="amount" render={({ field }) => (<FormItem><FormLabel>পরিমাণ (৳)</FormLabel><FormControl><Input type="number" {...field} onChange={(e) => field.onChange(e.target.value === "" ? undefined : parseFloat(e.target.value))} /></FormControl><FormMessage /></FormItem>)} />
                     <FormField control={form.control} name="paymentDate" render={({ field }) => (<FormItem><FormLabel>তারিখ</FormLabel><FormControl><Input type="date" {...field} /></FormControl><FormMessage /></FormItem>)} />
                     <FormField control={form.control} name="paymentMethod" render={({ field }) => (<FormItem><FormLabel>পদ্ধতি</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl><SelectContent><SelectItem value="CASH">নগদ</SelectItem><SelectItem value="BANK">ব্যাংক</SelectItem><SelectItem value="MOBILE_BANKING">মোবাইল ব্যাংকিং</SelectItem></SelectContent></Select><FormMessage /></FormItem>)} />
                   </div>
@@ -213,7 +213,7 @@ const FarmerPayments = () => {
           <DialogHeader><DialogTitle>পেমেন্ট সংশোধন</DialogTitle></DialogHeader>
           {editing && (
             <div className="space-y-3">
-              <div><Label>পরিমাণ</Label><Input type="number" value={editing.amount} onChange={(e) => setEditing({ ...editing, amount: parseFloat(e.target.value) || 0 })} /></div>
+              <div><Label>পরিমাণ</Label><Input type="number" value={editing.amount} onChange={(e) => setEditing({ ...editing, amount: e.target.value === "" ? undefined : parseFloat(e.target.value) })} /></div>
               <div><Label>কারণ (Reason)</Label><Input value={editing.reason} onChange={(e) => setEditing({ ...editing, reason: e.target.value })} placeholder="সংশোধনের কারণ লিখুন" /></div>
             </div>
           )}

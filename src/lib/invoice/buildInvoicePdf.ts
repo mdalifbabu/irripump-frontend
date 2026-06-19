@@ -2,91 +2,93 @@ import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import type { InvoiceResponse } from "@/lib/api/types";
 
+// Portrait, mobile-width canvas: 90mm × 160mm
+const PAGE_W = 90;
+const PAGE_H = 160;
+const MARGIN = 5;
+
 const BUSINESS_NAME_EN = "Alhaj Yeaqub Ali Irrigation Pump";
 const BUSINESS_NAME_BN = "আলহাজ্ব ইয়াকুব আলী সেচ প্রকল্প";
 
-/**
- * Builds the invoice PDF entirely in the browser from the JSON the backend returns.
- * Nothing binary crosses the network, so there's no "invalid PDF" failure mode here —
- * the worst case is a JS error before the file is even generated.
- */
+function fmt(n: number | undefined | null): string {
+  return `৳${(n ?? 0).toLocaleString("en-BD", { minimumFractionDigits: 0 })}`;
+}
+
 export function buildInvoicePdf(data: InvoiceResponse): jsPDF {
-  const doc = new jsPDF();
-  const pageWidth = doc.internal.pageSize.getWidth();
+  const doc = new jsPDF({ unit: "mm", format: [PAGE_W, PAGE_H], orientation: "portrait" });
+  const w = PAGE_W;
 
-  doc.setFontSize(16);
-  doc.text(BUSINESS_NAME_EN, pageWidth / 2, 16, { align: "center" });
-  doc.setFontSize(12);
-  doc.text(BUSINESS_NAME_BN, pageWidth / 2, 23, { align: "center" });
+  doc.setFontSize(8);
+  doc.setFont("helvetica", "bold");
+  doc.text(BUSINESS_NAME_EN, w / 2, 8, { align: "center" });
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(7);
+  doc.text(BUSINESS_NAME_BN, w / 2, 12, { align: "center" });
 
-  doc.setFontSize(14);
-  doc.text("INVOICE", pageWidth / 2, 33, { align: "center" });
-
-  doc.setFontSize(10);
-  doc.text(`Invoice No: ${data.invoiceNo}`, 14, 42);
-  doc.text(`Issued: ${new Date(data.issuedAt).toLocaleString()}`, pageWidth - 14, 42, { align: "right" });
-
-  let y = 52;
-  doc.setFontSize(11);
-  doc.text("Pump", 14, y);
-  doc.text("Farmer", pageWidth / 2 + 4, y);
-  y += 6;
   doc.setFontSize(9);
-  doc.text(`${data.pump.name} (#${data.pump.identifier})`, 14, y);
-  doc.text(`${data.farmer.name} (${data.farmer.identifier})`, pageWidth / 2 + 4, y);
-  y += 6;
-  doc.text(`Operator: ${data.operator.name}`, 14, y);
-  if (data.season.name) {
-    doc.text(`Season: ${data.season.name}${data.season.type ? ` (${data.season.type})` : ""} ${data.season.year ?? ""}`, pageWidth / 2 + 4, y);
-  }
-  y += 10;
+  doc.setFont("helvetica", "bold");
+  doc.text("INVOICE", w / 2, 18, { align: "center" });
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(6);
+  doc.text(`No: ${data.invoiceNo}`, MARGIN, 23);
+  doc.text(new Date(data.issuedAt).toLocaleString(), w - MARGIN, 23, { align: "right" });
 
-  doc.setFontSize(11);
-  doc.text("Payment", 14, y);
-  y += 6;
-  doc.setFontSize(9);
-  doc.text(`Amount: ${data.payment.amount.toFixed(2)}  |  Date: ${data.payment.paidAt}  |  Method: ${data.payment.method}`, 14, y);
-  y += 8;
+  let y = 28;
+  doc.setFontSize(7);
+  doc.setFont("helvetica", "bold");
+  doc.text("Farmer", MARGIN, y);
+  doc.setFont("helvetica", "normal");
+  y += 4;
+  doc.text(`${data.farmer.name} (${data.farmer.identifier})`, MARGIN, y);
+  y += 3;
+  doc.text(`Season: ${data.season.name ?? ""} ${data.season.year ?? ""}`, MARGIN, y);
+  y += 3;
+  doc.text(`Pump: ${data.pump.name}  |  Operator: ${data.operator.name}`, MARGIN, y);
+
+  y += 5;
+  doc.setFont("helvetica", "bold");
+  doc.text("Payment", MARGIN, y);
+  doc.setFont("helvetica", "normal");
+  y += 4;
+  doc.text(`${fmt(data.payment.amount)}  •  ${data.payment.paidAt}  •  ${data.payment.method}`, MARGIN, y);
 
   if (data.lands.length > 0) {
+    y += 5;
     autoTable(doc, {
       startY: y,
-      head: [["Landmark No.", "Area"]],
+      head: [["Landmark", "Area"]],
       body: data.lands.map((l) => [l.landmarkNumber, l.area]),
       theme: "grid",
-      styles: { fontSize: 9 },
-      headStyles: { fillColor: [60, 120, 60] },
+      styles: { fontSize: 6, cellPadding: 1 },
+      headStyles: { fillColor: [60, 120, 60], fontSize: 6 },
+      margin: { left: MARGIN, right: MARGIN },
     });
-    y = (doc as any).lastAutoTable.finalY + 8;
+    y = (doc as any).lastAutoTable.finalY + 4;
   }
 
-  // The season-wise allocation ladder — mirrors the farmer ledger.
   autoTable(doc, {
     startY: y,
-    head: [["Season", "Due Date", "Applied", "Remaining After"]],
-    body: data.allocations.map((a) => [
-      a.seasonName,
-      a.dueDate,
-      a.applied.toFixed(2),
-      a.remainingAfter.toFixed(2),
-    ]),
+    head: [["Season", "Applied", "Remaining"]],
+    body: data.allocations.map((a) => [a.seasonName, fmt(a.applied), fmt(a.remainingAfter)]),
     theme: "grid",
-    styles: { fontSize: 9 },
-    headStyles: { fillColor: [40, 80, 140] },
+    styles: { fontSize: 6, cellPadding: 1 },
+    headStyles: { fillColor: [40, 80, 140], fontSize: 6 },
+    margin: { left: MARGIN, right: MARGIN },
   });
-  y = (doc as any).lastAutoTable.finalY + 10;
+  y = (doc as any).lastAutoTable.finalY + 4;
 
   autoTable(doc, {
     startY: y,
     body: [
-      ["Total Due", data.balances.totalDue.toFixed(2)],
-      ["Total Paid", data.balances.totalPaid.toFixed(2)],
-      ["Outstanding", data.balances.outstanding.toFixed(2)],
-      ["Credit Balance", data.balances.creditBalance.toFixed(2)],
+      ["Total Due", fmt(data.balances.totalDue)],
+      ["Total Paid", fmt(data.balances.totalPaid)],
+      ["Outstanding", fmt(data.balances.outstanding)],
+      ["Credit", fmt(data.balances.creditBalance)],
     ],
     theme: "plain",
-    styles: { fontSize: 10, fontStyle: "bold" },
+    styles: { fontSize: 7, fontStyle: "bold", cellPadding: 1 },
     columnStyles: { 1: { halign: "right" } },
+    margin: { left: MARGIN, right: MARGIN },
   });
 
   return doc;

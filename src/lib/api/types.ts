@@ -63,6 +63,7 @@ export interface Land {
   sizeShatak: number;
   coordinates?: string;
   description?: string;
+  tag?: string;
   isActive?: boolean;
   createdAt?: string;
   updatedAt?: string;
@@ -217,7 +218,18 @@ export interface FarmerPortalData {
   id?: number;
   farmer: Farmer;
   lands: Land[];
+  // Payments allocated to the current season only
   payments: Payment[];
+  // Current season context
+  currentSeasonId?: number;
+  currentSeasonName?: string;
+  currentSeasonNameBengali?: string;
+  currentSeasonYear?: number;
+  // Season-wise ledger from FIFO allocation data
+  seasonLedgers?: SeasonLedger[];
+  // Sum of outstanding across ALL seasons (including fully-active past)
+  totalOutstanding: number;
+  // Current season outstanding + past seasons with unpaid balance (settled seasons excluded)
   totalDue: number;
   totalPaid: number;
 }
@@ -336,6 +348,25 @@ export interface CreateLandRequest {
   sizeShatak: number;
   coordinates?: string;
   description?: string;
+  tag?: string;
+}
+
+export interface YearlySeasonSummary {
+  seasonId: number;
+  seasonName: string;
+  seasonNameBengali: string;
+  seasonKind?: string;
+  totalBilled: number;
+  totalCollected: number;
+  totalOutstanding: number;
+}
+
+export interface YearlyDashboard {
+  pumpId: number;
+  year: number;
+  totalDue: number;
+  totalIncome: number;
+  seasons: YearlySeasonSummary[];
 }
 
 export interface AssignLandRequest {
