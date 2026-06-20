@@ -9,12 +9,9 @@ import { ledgerApi } from "@/lib/api/client";
 import type { LedgerResponse, SeasonLedger } from "@/lib/api/types";
 import { ArrowLeft, TrendingDown, TrendingUp, Wallet } from "lucide-react";
 import AppNavbar from "@/components/AppNavbar";
+import { userNavItems } from "@/lib/navItems";
 
-const userNavItems = [
-  { label: "ড্যাশবোর্ড", path: "/user/dashboard" },
-  { label: "কৃষক", path: "/user/farmers" },
-  { label: "মৌসুম", path: "/user/seasons" },
-];
+
 
 const KIND_LABEL: Record<string, string> = {
   BORO: "বোরো",

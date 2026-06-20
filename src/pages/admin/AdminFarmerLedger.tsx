@@ -7,12 +7,13 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
-import { ledgerApi, adminOverrideApi } from "@/lib/api/client";
-import type { LedgerResponse, SeasonLedger, LedgerAllocation } from "@/lib/api/types";
-import { ArrowLeft, TrendingDown, TrendingUp, Wallet, Loader2 } from "lucide-react";
+import { ledgerApi, seasonApi, adminOverrideApi } from "@/lib/api/client";
+import type { LedgerResponse, SeasonLedger, LedgerAllocation, Season } from "@/lib/api/types";
+import { ArrowLeft, TrendingDown, TrendingUp, Wallet, Loader2, Filter } from "lucide-react";
 import AppNavbar from "@/components/AppNavbar";
 
 const adminNavItems = [
@@ -24,6 +25,8 @@ const adminNavItems = [
 const AdminFarmerLedger = () => {
   const { farmerId } = useParams<{ farmerId: string }>();
   const [ledger, setLedger] = useState<LedgerResponse | null>(null);
+  const [seasons, setSeasons] = useState<Season[]>([]);
+  const [selectedSeasonId, setSelectedSeasonId] = useState<number | undefined>(undefined);
   const [loading, setLoading] = useState(true);
   const [adjusting, setAdjusting] = useState<SeasonLedger | null>(null);
   const [newAmount, setNewAmount] = useState("");
@@ -46,15 +49,27 @@ const AdminFarmerLedger = () => {
     }
   }, [isLoading, isAuthenticated, user, navigate, toast]);
 
-  const fetchLedger = async () => {
+  const fetchLedger = async (seasonId?: number) => {
     if (!farmerId) return;
     setLoading(true);
-    try { setLedger(await ledgerApi.getLedger(Number(farmerId))); }
-    catch { toast({ title: "Error", description: "Could not load ledger", variant: "destructive" }); }
+    try {
+      const data = await ledgerApi.getLedger(Number(farmerId), seasonId);
+      setLedger(data);
+      if (seasons.length === 0 && data.pumpId) {
+        const pumpSeasons = await seasonApi.getByPump(data.pumpId);
+        setSeasons(pumpSeasons.sort((a, b) => b.year - a.year || a.seasonName.localeCompare(b.seasonName)));
+      }
+    } catch { toast({ title: "Error", description: "Could not load ledger", variant: "destructive" }); }
     finally { setLoading(false); }
   };
 
   useEffect(() => { fetchLedger(); }, [farmerId]);
+
+  const handleSeasonChange = (value: string) => {
+    const id = value === "all" ? undefined : Number(value);
+    setSelectedSeasonId(id);
+    fetchLedger(id);
+  };
 
   const handleAdjust = async () => {
     if (!adjusting || !adjustReason.trim()) return;
@@ -67,7 +82,7 @@ const AdminFarmerLedger = () => {
       });
       toast({ title: waive ? "মওকুফ করা হয়েছে" : "সমন্বয় করা হয়েছে" });
       setAdjusting(null); setNewAmount(""); setWaive(false); setAdjustReason("");
-      await fetchLedger();
+      await fetchLedger(selectedSeasonId);
     } catch (e: any) { toast({ title: "Error", description: e.message, variant: "destructive" }); }
     finally { setBusy(false); }
   };
@@ -79,7 +94,7 @@ const AdminFarmerLedger = () => {
       await adminOverrideApi.reversePayment(reversing.paymentId, { reason: reverseReason.trim() });
       toast({ title: "পেমেন্ট বাতিল করা হয়েছে" });
       setReversing(null); setReverseReason("");
-      await fetchLedger();
+      await fetchLedger(selectedSeasonId);
     } catch (e: any) { toast({ title: "Error", description: e.message, variant: "destructive" }); }
     finally { setBusy(false); }
   };
@@ -91,7 +106,7 @@ const AdminFarmerLedger = () => {
       await adminOverrideApi.forceRemoveFarmer(removing.seasonId, Number(farmerId), { reason: removeReason.trim() });
       toast({ title: "মৌসুম থেকে অপসারণ করা হয়েছে" });
       setRemoving(null); setRemoveReason("");
-      await fetchLedger();
+      await fetchLedger(selectedSeasonId);
     } catch (e: any) { toast({ title: "Error", description: e.message, variant: "destructive" }); }
     finally { setBusy(false); }
   };
@@ -99,6 +114,10 @@ const AdminFarmerLedger = () => {
   if (isLoading || loading) {
     return <div className="min-h-screen flex items-center justify-center"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary" /></div>;
   }
+
+  const totalBilled = ledger?.seasons.reduce((s, r) => s + r.billed, 0) ?? 0;
+  const totalCollected = ledger?.seasons.reduce((s, r) => s + r.collected, 0) ?? 0;
+  const totalOutstanding = ledger?.seasons.reduce((s, r) => s + r.outstanding, 0) ?? 0;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-primary/10 via-background to-accent/10">
@@ -110,6 +129,38 @@ const AdminFarmerLedger = () => {
       />
 
       <main className="max-w-3xl mx-auto p-4 md:p-6 space-y-5">
+        {/* Season selector */}
+        {seasons.length > 0 && (
+          <Card>
+            <CardContent className="pt-4 pb-4">
+              <div className="flex items-center gap-3">
+                <Filter className="w-4 h-4 text-muted-foreground shrink-0" />
+                <Select
+                  value={selectedSeasonId ? String(selectedSeasonId) : "all"}
+                  onValueChange={handleSeasonChange}
+                >
+                  <SelectTrigger className="w-64">
+                    <SelectValue placeholder="মৌসুম বেছে নিন" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">সব মৌসুম</SelectItem>
+                    {seasons.map((s) => (
+                      <SelectItem key={s.id} value={String(s.id)}>
+                        {s.seasonName} — {s.year}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {selectedSeasonId && (
+                  <Button variant="ghost" size="sm" onClick={() => handleSeasonChange("all")}>
+                    ফিল্টার সরান
+                  </Button>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
         {!ledger ? (
           <Card><CardContent className="py-12 text-center text-muted-foreground">কোনো লেজার পাওয়া যায়নি</CardContent></Card>
         ) : (
@@ -127,9 +178,9 @@ const AdminFarmerLedger = () => {
             )}
 
             <div className="grid grid-cols-3 gap-3">
-              <SummaryCard label="মোট দেনা" value={ledger.seasons.reduce((s, r) => s + r.billed, 0)} icon={<TrendingUp className="w-4 h-4 text-orange-500" />} color="text-orange-700" />
-              <SummaryCard label="মোট আদায়" value={ledger.seasons.reduce((s, r) => s + r.collected, 0)} icon={<TrendingDown className="w-4 h-4 text-green-500" />} color="text-green-700" />
-              <SummaryCard label="বকেয়া" value={ledger.seasons.reduce((s, r) => s + r.outstanding, 0)} icon={<Wallet className="w-4 h-4 text-red-500" />} color="text-red-700" />
+              <SummaryCard label="মোট দেনা" value={totalBilled} icon={<TrendingUp className="w-4 h-4 text-orange-500" />} color="text-orange-700" />
+              <SummaryCard label="মোট আদায়" value={totalCollected} icon={<TrendingDown className="w-4 h-4 text-green-500" />} color="text-green-700" />
+              <SummaryCard label="বকেয়া" value={totalOutstanding} icon={<Wallet className="w-4 h-4 text-red-500" />} color="text-red-700" />
             </div>
 
             {ledger.seasons.length === 0 ? (

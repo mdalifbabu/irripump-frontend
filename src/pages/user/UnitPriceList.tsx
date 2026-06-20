@@ -20,13 +20,9 @@ import type { UnitPrice } from "@/lib/api/types";
 import { Plus, Loader2, Pencil, Trash2 } from "lucide-react";
 import AppNavbar from "@/components/AppNavbar";
 import PumpSelector from "@/components/PumpSelector";
+import { userNavItems } from "@/lib/navItems";
 
-const userNavItems = [
-  { label: "ড্যাশবোর্ড", path: "/user/dashboard" },
-  { label: "কৃষক", path: "/user/farmers" },
-  { label: "মৌসুম", path: "/user/seasons" },
-  { label: "ইউনিট মূল্য", path: "/user/unit-prices" },
-];
+
 
 const schema = z.object({
   pricePerShatak: z.number().min(1, "Price must be > 0"),

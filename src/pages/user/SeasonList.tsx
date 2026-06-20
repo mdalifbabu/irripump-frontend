@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem, SelectGroup, SelectLabel } from "@/components/ui/select";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
@@ -16,13 +16,9 @@ import type { Season, CreateSeasonRequest } from "@/lib/api/types";
 import { Plus, Star, Trash2, RefreshCw, CalendarDays, Loader2, Shuffle } from "lucide-react";
 import AppNavbar from "@/components/AppNavbar";
 import PumpSelector from "@/components/PumpSelector";
+import { userNavItems } from "@/lib/navItems";
 
-const navItems = [
-  { label: "ড্যাশবোর্ড", path: "/user/dashboard" },
-  { label: "কৃষক", path: "/user/farmers" },
-  { label: "মৌসুম", path: "/user/seasons" },
-  { label: "ইউনিট মূল্য", path: "/user/unit-prices" },
-];
+
 
 const seasonKindOptions: { value: CreateSeasonRequest["seasonKind"]; label: string }[] = [
   { value: "BORO", label: "বোরো (Boro)" },
@@ -50,6 +46,7 @@ export default function SeasonList() {
   const [transferTarget, setTransferTarget] = useState<Season | null>(null);
   const [transferSourceId, setTransferSourceId] = useState<string>("");
   const [transferring, setTransferring] = useState(false);
+  const [allYearsSeasons, setAllYearsSeasons] = useState<Season[]>([]);
 
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -128,10 +125,22 @@ export default function SeasonList() {
     }
   };
 
-  const openTransfer = (targetSeason: Season) => {
+  const openTransfer = async (targetSeason: Season) => {
     setTransferTarget(targetSeason);
     setTransferSourceId("");
+    setAllYearsSeasons([]);
     setShowTransfer(true);
+    try {
+      const all = await seasonApi.getByPump(pumpId!);
+      const prevYear = targetSeason.year - 1;
+      setAllYearsSeasons(
+        all
+          .filter(s => s.id !== targetSeason.id && (s.year === targetSeason.year || s.year === prevYear))
+          .sort((a, b) => b.year - a.year || a.seasonName.localeCompare(b.seasonName))
+      );
+    } catch {
+      toast({ title: "Error", description: "মৌসুম তালিকা আনতে ব্যর্থ", variant: "destructive" });
+    }
   };
 
   const handleTransfer = async () => {
@@ -152,8 +161,9 @@ export default function SeasonList() {
     }
   };
 
-  // All seasons across all years for the source picker
-  const allPumpSeasons = contextSeasons.filter(s => transferTarget && s.id !== transferTarget.id);
+  const prevYear = transferTarget ? transferTarget.year - 1 : null;
+  const sameYearSources = allYearsSeasons.filter(s => transferTarget && s.year === transferTarget.year);
+  const prevYearSources = allYearsSeasons.filter(s => transferTarget && s.year === prevYear);
 
   if (isLoading) {
     return <div className="min-h-screen flex items-center justify-center"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary" /></div>;
@@ -164,7 +174,7 @@ export default function SeasonList() {
       <AppNavbar
         title="মৌসুম ব্যবস্থাপনা"
         subtitle="Season Management"
-        navItems={navItems}
+        navItems={userNavItems}
         rightContent={<PumpSelector />}
       />
 
@@ -307,7 +317,7 @@ export default function SeasonList() {
           </DialogHeader>
           <div className="space-y-3 py-2">
             <p className="text-sm text-muted-foreground">
-              একটি উৎস মৌসুম থেকে সকল কৃষক ও তাদের জমি বরাদ্দ{" "}
+              {transferTarget?.year} বা {prevYear} সালের একটি মৌসুম থেকে সকল কৃষক ও তাদের জমি বরাদ্দ{" "}
               <strong>"{transferTarget?.seasonNameBengali}"</strong>-এ কপি করুন।
               পেমেন্ট, বকেয়া বা হিসাব কপি হবে না — নতুন মৌসুম পরিষ্কার থাকবে।
             </p>
@@ -316,11 +326,25 @@ export default function SeasonList() {
               <Select value={transferSourceId} onValueChange={setTransferSourceId}>
                 <SelectTrigger><SelectValue placeholder="উৎস মৌসুম নির্বাচন করুন" /></SelectTrigger>
                 <SelectContent>
-                  {allPumpSeasons.map((s) => (
-                    <SelectItem key={s.id} value={String(s.id)}>
-                      {s.seasonNameBengali} ({s.year})
-                    </SelectItem>
-                  ))}
+                  {allYearsSeasons.length === 0 && (
+                    <SelectItem value="__none" disabled>কোনো মৌসুম পাওয়া যায়নি</SelectItem>
+                  )}
+                  {sameYearSources.length > 0 && (
+                    <SelectGroup>
+                      <SelectLabel>{transferTarget?.year} সাল (একই বছর)</SelectLabel>
+                      {sameYearSources.map(s => (
+                        <SelectItem key={s.id} value={String(s.id)}>{s.seasonNameBengali}</SelectItem>
+                      ))}
+                    </SelectGroup>
+                  )}
+                  {prevYearSources.length > 0 && (
+                    <SelectGroup>
+                      <SelectLabel>{prevYear} সাল (আগের বছর)</SelectLabel>
+                      {prevYearSources.map(s => (
+                        <SelectItem key={s.id} value={String(s.id)}>{s.seasonNameBengali}</SelectItem>
+                      ))}
+                    </SelectGroup>
+                  )}
                 </SelectContent>
               </Select>
             </div>

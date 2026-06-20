@@ -27,6 +27,7 @@ export interface Pump {
   location: string;
   installationDate: string;
   status: "ACTIVE" | "INACTIVE" | "MAINTENANCE";
+  farmerCodePrefix?: string;
   isActive?: boolean;
   createdAt?: string;
   updatedAt?: string;
@@ -57,9 +58,7 @@ export interface Land {
   id: number;
   pumpId: number;
   pumpName?: string;
-  landIdentificationNumber: string;
   landmarkNumber: string;
-  sizeBigha: number;
   sizeShatak: number;
   coordinates?: string;
   description?: string;
@@ -75,14 +74,11 @@ export interface FarmerLandAssignment {
   farmerName?: string;
   farmerCode?: string;
   landId: number;
-  landIdentificationNumber?: string;
   landmarkNumber?: string;
   seasonId: number;
   seasonName?: string;
   year: number;
-  landSizeBigha?: number;
   landSizeShatak?: number;
-  assignedSizeBigha?: number;
   assignedSizeShatak?: number;
   notes?: string;
   isActive?: boolean;
@@ -117,7 +113,7 @@ export interface SeasonDashboard {
   year: number;
   totalFarmers: number;
   totalLands: number;
-  totalLandSizeBigha: number;
+  totalLandSizeShatak: number;
   pricePerShatak: number;
   totalBilled: number;
   totalCollected: number;
@@ -146,6 +142,7 @@ export interface SeasonLedger {
 
 export interface LedgerResponse {
   farmerId: number;
+  pumpId: number;
   farmerCode: string;
   nameBengali: string;
   creditBalance: number;
@@ -245,7 +242,7 @@ export interface FarmerSummaryResponse {
   seasonId?: number;
   year?: number;
   landCount?: number;
-  totalLandSizeBigha?: number;
+  totalLandSizeShatak?: number;
   dueAmount?: number;
 }
 
@@ -286,7 +283,7 @@ export interface FarmerDetailResponse {
   seasonName?: string;
   year?: number;
   landCount?: number;
-  totalLandSizeBigha?: number;
+  totalLandSizeShatak?: number;
   calculatedCost?: number;
   totalPaid?: number;
   dueAmount?: number;
@@ -342,13 +339,20 @@ export interface CreateFarmerRequest {
 
 export interface CreateLandRequest {
   pumpId: number;
-  landIdentificationNumber: string;
   landmarkNumber: string;
-  sizeBigha: number;
-  sizeShatak: number;
+  sizeShatak?: number;
   coordinates?: string;
   description?: string;
   tag?: string;
+}
+
+export interface UpdateLandRequest {
+  landmarkNumber?: string;
+  sizeShatak?: number;
+  coordinates?: string;
+  description?: string;
+  tag?: string;
+  isActive?: boolean;
 }
 
 export interface YearlySeasonSummary {
@@ -374,7 +378,6 @@ export interface AssignLandRequest {
   landId: number;
   seasonId: number;
   year: number;
-  assignedSizeBigha?: number;
   assignedSizeShatak?: number;
   notes?: string;
 }
@@ -495,6 +498,33 @@ export interface AuditLogSearchParams {
   entityType?: string;
   from?: string;
   to?: string;
+  page?: number;
+  size?: number;
+}
+
+export interface PageResponse<T> {
+  content: T[];
+  totalElements: number;
+  totalPages: number;
+  number: number;   // current page (0-indexed)
+  size: number;
+  last: boolean;
+}
+
+export interface PaymentResponse {
+  id: number;
+  farmerId: number;
+  farmerName: string;
+  farmerCode: string;
+  amount: number;
+  paymentDate: string;
+  paymentMethod: string;
+  transactionReference?: string;
+  paymentType: string;
+  adjustmentReason?: string;
+  isReversed: boolean;
+  reversedAt?: string;
+  reversedReason?: string;
 }
 
 // ── Invoice: backend returns this JSON, the PDF is rendered client-side ──────────

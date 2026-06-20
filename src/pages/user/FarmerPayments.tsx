@@ -17,18 +17,17 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { farmerApi, paymentApi, invoiceApi } from "@/lib/api/client";
 import { buildInvoicePdf } from "@/lib/invoice/buildInvoicePdf";
+import { buildPaymentListPdf } from "@/lib/invoice/buildPaymentListPdf";
 import type { Farmer, Payment } from "@/lib/api/types";
-import { Plus, Loader2, Download, Pencil, Trash2 } from "lucide-react";
+import { Plus, Loader2, Download, Pencil, Trash2, FileText } from "lucide-react";
 import AppNavbar from "@/components/AppNavbar";
 import PumpSelector from "@/components/PumpSelector";
+import PaginationBar from "@/components/PaginationBar";
+import { userNavItems } from "@/lib/navItems";
 
-const userNavItems = [
-  { label: "ড্যাশবোর্ড", path: "/user/dashboard" },
-  { label: "কৃষক", path: "/user/farmers" },
-  { label: "মৌসুম", path: "/user/seasons" },
-  { label: "জমি", path: "/user/lands" },
-  { label: "ইউনিট মূল্য", path: "/user/unit-prices" },
-];
+const PAGE_SIZE = 10;
+
+
 
 const schema = z.object({
   amount: z.number().min(1),
@@ -44,8 +43,12 @@ const FarmerPayments = () => {
   const [farmer, setFarmer] = useState<Farmer | null>(null);
   const [payments, setPayments] = useState<Payment[]>([]);
   const [loading, setLoading] = useState(true);
+  const [currentPage, setCurrentPage] = useState(0);
+  const [totalPages, setTotalPages] = useState(0);
+  const [totalElements, setTotalElements] = useState(0);
   const [submitting, setSubmitting] = useState(false);
   const [downloadingId, setDownloadingId] = useState<number | null>(null);
+  const [downloadingList, setDownloadingList] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<{ id: number; amount: number; reason: string } | null>(null);
   const [deleting, setDeleting] = useState<Payment | null>(null);
@@ -61,14 +64,23 @@ const FarmerPayments = () => {
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) { navigate("/auth"); return; }
-    if (!isLoading && isAuthenticated && farmerId) fetchData();
+    if (!isLoading && isAuthenticated && farmerId) fetchData(0);
   }, [isLoading, isAuthenticated, farmerId, navigate]);
 
-  const fetchData = async () => {
+  const fetchData = async (page: number, farmerObj?: Farmer) => {
     setLoading(true);
     try {
-      const [f, p] = await Promise.all([farmerApi.getById(parseInt(farmerId!)), paymentApi.getByFarmer(parseInt(farmerId!))]);
-      setFarmer(f); setPayments(p);
+      const id = parseInt(farmerId!);
+      let f = farmerObj ?? farmer;
+      if (!f) {
+        f = await farmerApi.getById(id);
+        setFarmer(f);
+      }
+      const result = await paymentApi.getByFarmerPaged(id, page, PAGE_SIZE);
+      setPayments(result.content);
+      setCurrentPage(result.number);
+      setTotalPages(result.totalPages);
+      setTotalElements(result.totalElements);
     } catch { toast({ title: "Error", variant: "destructive" }); }
     finally { setLoading(false); }
   };
@@ -78,7 +90,7 @@ const FarmerPayments = () => {
     try {
       await paymentApi.create(parseInt(farmerId!), { ...(data as Required<FormData>), transactionReference: data.transactionReference || undefined });
       toast({ title: "পেমেন্ট রেকর্ড হয়েছে" });
-      form.reset(); setShowForm(false); fetchData();
+      form.reset(); setShowForm(false); fetchData(0);
     } catch (e: any) { toast({ title: "Error", description: e.message, variant: "destructive" }); }
     finally { setSubmitting(false); }
   };
@@ -89,7 +101,7 @@ const FarmerPayments = () => {
     try {
       await paymentApi.update(editing.id, { amount: editing.amount, reason: editing.reason });
       toast({ title: "আপডেট সফল" });
-      setEditing(null); fetchData();
+      setEditing(null); fetchData(currentPage);
     } catch (e: any) { toast({ title: "Error", description: e.message, variant: "destructive" }); }
     finally { setBusy(false); }
   };
@@ -100,7 +112,7 @@ const FarmerPayments = () => {
     try {
       await paymentApi.delete(deleting.id);
       toast({ title: "মুছে ফেলা হয়েছে" });
-      setDeleting(null); fetchData();
+      setDeleting(null); fetchData(currentPage);
     } catch (e: any) { toast({ title: "Error", description: e.message, variant: "destructive" }); }
     finally { setBusy(false); }
   };
@@ -109,10 +121,25 @@ const FarmerPayments = () => {
     setDownloadingId(payment.id);
     try {
       const data = await invoiceApi.get(payment.id);
-      buildInvoicePdf(data).save(`invoice-${data.invoiceNo}.pdf`);
-      toast({ title: "Invoice downloaded" });
+      buildInvoicePdf(data).save(`invoice_${data.farmer.identifier}_${data.invoiceNo}.pdf`);
+      toast({ title: "ইনভয়েস ডাউনলোড হয়েছে" });
     } catch (e: any) { toast({ title: "Error", description: e.message || "Failed to download invoice", variant: "destructive" }); }
     finally { setDownloadingId(null); }
+  };
+
+  const handleDownloadPaymentList = () => {
+    if (!farmer) return;
+    setDownloadingList(true);
+    try {
+      buildPaymentListPdf({
+        farmerName: farmer.nameBengali,
+        farmerCode: farmer.farmerCode,
+        pumpName: farmer.pumpName ?? "",
+        payments,
+      }).save(`payments_${farmer.farmerCode}.pdf`);
+    } finally {
+      setDownloadingList(false);
+    }
   };
 
   const methodLabel: Record<string, string> = { CASH: "নগদ", BANK: "ব্যাংক", MOBILE_BANKING: "মোবাইল ব্যাংকিং" };
@@ -164,7 +191,15 @@ const FarmerPayments = () => {
         )}
 
         <Card>
-          <CardHeader><CardTitle>পেমেন্ট ইতিহাস ({payments.length})</CardTitle></CardHeader>
+          <CardHeader>
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <CardTitle>পেমেন্ট ইতিহাস ({totalElements}টি)</CardTitle>
+              <Button variant="outline" size="sm" onClick={handleDownloadPaymentList} disabled={downloadingList || payments.length === 0}>
+                {downloadingList ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <FileText className="w-4 h-4 mr-2" />}
+                পেমেন্ট তালিকা
+              </Button>
+            </div>
+          </CardHeader>
           <CardContent>
             {payments.length === 0 ? (
               <div className="text-center py-8 text-muted-foreground">কোনো পেমেন্ট নেই।</div>
@@ -202,6 +237,13 @@ const FarmerPayments = () => {
                     ))}
                   </TableBody>
                 </Table>
+                <PaginationBar
+                  currentPage={currentPage}
+                  totalPages={totalPages}
+                  totalElements={totalElements}
+                  pageSize={PAGE_SIZE}
+                  onPageChange={fetchData}
+                />
               </div>
             )}
           </CardContent>

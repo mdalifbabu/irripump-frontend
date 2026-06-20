@@ -1,10 +1,4 @@
-import jsPDF from "jspdf";
-import autoTable from "jspdf-autotable";
 import type { Payment } from "@/lib/api/types";
-
-const PAGE_W = 90;
-const PAGE_H = 160;
-const MARGIN = 5;
 
 const BUSINESS_NAME_EN = "Alhaj Yeaqub Ali Irrigation Pump";
 const BUSINESS_NAME_BN = "আলহাজ্ব ইয়াকুব আলী সেচ প্রকল্প";
@@ -14,59 +8,84 @@ function fmt(n: number): string {
 }
 
 export interface PaymentListPdfOptions {
-  farmerName: string;
-  farmerCode: string;
+  farmerName?: string;
+  farmerCode?: string;
   pumpName: string;
   seasonName?: string;
   year?: number;
   payments: Payment[];
 }
 
-export function buildPaymentListPdf(opts: PaymentListPdfOptions): jsPDF {
-  const doc = new jsPDF({ unit: "mm", format: [PAGE_W, PAGE_H], orientation: "portrait" });
-  const w = PAGE_W;
-
-  doc.setFontSize(8);
-  doc.setFont("helvetica", "bold");
-  doc.text(BUSINESS_NAME_EN, w / 2, 8, { align: "center" });
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(7);
-  doc.text(BUSINESS_NAME_BN, w / 2, 12, { align: "center" });
-
-  doc.setFontSize(9);
-  doc.setFont("helvetica", "bold");
-  doc.text("PAYMENT STATEMENT", w / 2, 18, { align: "center" });
-
-  doc.setFontSize(6);
-  doc.setFont("helvetica", "normal");
-  let y = 23;
-  doc.text(`Farmer: ${opts.farmerName} (${opts.farmerCode})`, MARGIN, y);
-  y += 3;
-  doc.text(`Pump: ${opts.pumpName}`, MARGIN, y);
-  if (opts.seasonName) {
-    y += 3;
-    doc.text(`Season: ${opts.seasonName} ${opts.year ?? ""}`, MARGIN, y);
-  }
-
-  y += 5;
-  const activePayments = opts.payments.filter((p) => !p.isReversed);
+export function buildPaymentListPdf(opts: PaymentListPdfOptions): { save: (filename: string) => void } {
+  const METHODS: Record<string, string> = { CASH: "নগদ", BANK: "ব্যাংক", MOBILE_BANKING: "মোবাইল" };
+  const TYPE: Record<string, string> = { PAYMENT: "পেমেন্ট", ADJUSTMENT: "সমন্বয়", DEDUCTION: "কর্তন" };
+  const activePayments = opts.payments.filter((p) => !p.isReversed && p.paymentType === "PAYMENT");
   const total = activePayments.reduce((s, p) => s + p.amount, 0);
+  const isFarmerSpecific = !!(opts.farmerName && opts.farmerCode);
 
-  autoTable(doc, {
-    startY: y,
-    head: [["Date", "Amount", "Method"]],
-    body: opts.payments.map((p) => [
-      p.paymentDate,
-      (p.isReversed ? "(R) " : "") + fmt(p.amount),
-      p.paymentMethod.replace("_", " "),
-    ]),
-    foot: [["Total", fmt(total), ""]],
-    theme: "grid",
-    styles: { fontSize: 6, cellPadding: 1 },
-    headStyles: { fillColor: [40, 80, 140], fontSize: 6 },
-    footStyles: { fillColor: [240, 240, 240], fontStyle: "bold", fontSize: 6 },
-    margin: { left: MARGIN, right: MARGIN },
-  });
+  const rows = opts.payments.map((p) => {
+    const farmerCol = isFarmerSpecific ? "" : `<td>${p.farmerId ?? "-"}</td>`;
+    return `<tr style="${p.isReversed ? "color:#999;text-decoration:line-through" : ""}">
+      ${farmerCol}
+      <td>${p.paymentDate}</td>
+      <td>${fmt(p.amount)}</td>
+      <td>${TYPE[p.paymentType] ?? p.paymentType}</td>
+      <td>${METHODS[p.paymentMethod] ?? p.paymentMethod}</td>
+    </tr>`;
+  }).join("");
 
-  return doc;
+  const farmerHeader = isFarmerSpecific
+    ? `<div>${opts.farmerName} (${opts.farmerCode})</div>`
+    : `<div>সকল কৃষকের পেমেন্ট</div>`;
+
+  const farmerColHeader = isFarmerSpecific ? "" : "<th>কৃষক ID</th>";
+  const farmerColFooter = isFarmerSpecific ? "" : "<td></td>";
+
+  const html = `<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8"/>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Noto Sans Bengali', Arial, sans-serif; }
+  body { width: 100%; padding: 5mm; font-size: 8pt; }
+  h1 { font-size: 8pt; text-align: center; }
+  h2 { font-size: 7pt; text-align: center; color: #555; margin-bottom: 6px; }
+  .title { font-size: 9pt; font-weight: bold; text-align: center; margin: 4px 0; }
+  .meta { font-size: 7pt; margin-bottom: 8px; page-break-inside: avoid; }
+  table { width: 100%; border-collapse: collapse; font-size: 6pt; page-break-inside: avoid; }
+  tr { page-break-inside: avoid; }
+  th { background: #28508c; color: #fff; padding: 2px 4px; text-align: left; }
+  td { padding: 2px 4px; border-bottom: 1px solid #eee; }
+  tfoot td { font-weight: bold; background: #f5f5f5; }
+</style>
+</head>
+<body>
+<h1>${BUSINESS_NAME_EN}</h1>
+<h2>${BUSINESS_NAME_BN}</h2>
+<div class="title">PAYMENT STATEMENT</div>
+<div class="meta">
+  ${farmerHeader}
+  <div>${opts.pumpName}${opts.seasonName ? ` | ${opts.seasonName} ${opts.year ?? ""}` : ""}</div>
+</div>
+<table>
+  <thead><tr>${farmerColHeader}<th>তারিখ</th><th>পরিমাণ</th><th>ধরন</th><th>পদ্ধতি</th></tr></thead>
+  <tbody>${rows}</tbody>
+  <tfoot><tr>${farmerColFooter}<td>মোট</td><td>${fmt(total)}</td><td></td><td></td></tr></tfoot>
+</table>
+</body>
+</html>`;
+
+  return {
+    save: (_filename: string) => {
+      const iframe = document.createElement("iframe");
+      iframe.style.cssText = "position:fixed;left:-9999px;top:0;width:800px;height:1px;border:0;";
+      document.body.appendChild(iframe);
+      const doc = iframe.contentDocument ?? iframe.contentWindow?.document;
+      if (!doc) { document.body.removeChild(iframe); return; }
+      doc.open(); doc.write(html); doc.close();
+      const cleanup = () => { document.body.removeChild(iframe); };
+      iframe.contentWindow?.addEventListener("afterprint", cleanup);
+      setTimeout(() => { iframe.contentWindow?.print(); }, 300);
+    },
+  };
 }

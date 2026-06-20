@@ -12,6 +12,9 @@ import type { Farmer } from "@/lib/api/types";
 import { Search, RefreshCw } from "lucide-react";
 import AppNavbar from "@/components/AppNavbar";
 import PumpSelector from "@/components/PumpSelector";
+import PaginationBar from "@/components/PaginationBar";
+
+const PAGE_SIZE = 20;
 
 const adminNavItems = [
   { label: "ড্যাশবোর্ড", path: "/admin/dashboard" },
@@ -29,6 +32,9 @@ const AdminFarmerList = () => {
   const [farmers, setFarmers] = useState<Farmer[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [loading, setLoading] = useState(false);
+  const [currentPage, setCurrentPage] = useState(0);
+  const [totalPages, setTotalPages] = useState(0);
+  const [totalElements, setTotalElements] = useState(0);
   const navigate = useNavigate();
   const { toast } = useToast();
   const { user, isAuthenticated, isLoading } = useAuth();
@@ -42,21 +48,22 @@ const AdminFarmerList = () => {
     }
   }, [isLoading, isAuthenticated, user, navigate, toast]);
 
-  useEffect(() => { fetchFarmers(); }, [pumpId]);
+  useEffect(() => { fetchFarmers(0); }, [pumpId]);
 
-  const fetchFarmers = async () => {
+  const fetchFarmers = async (page: number, query?: string) => {
     setLoading(true);
-    try { setFarmers(await adminApi.getAllFarmers(pumpId || undefined)); }
-    catch { toast({ title: "Error", description: "Failed to fetch farmers", variant: "destructive" }); }
+    const q = query !== undefined ? query : searchQuery;
+    try {
+      const result = await adminApi.getFarmersPaged(pumpId || undefined, q.trim(), page, PAGE_SIZE);
+      setFarmers(result.content);
+      setCurrentPage(result.number);
+      setTotalPages(result.totalPages);
+      setTotalElements(result.totalElements);
+    } catch { toast({ title: "Error", description: "Failed to fetch farmers", variant: "destructive" }); }
     finally { setLoading(false); }
   };
 
-  const handleSearch = async () => {
-    setLoading(true);
-    try { setFarmers(await adminApi.getAllFarmers(pumpId || undefined, searchQuery.trim() || undefined)); }
-    catch { toast({ title: "Error", variant: "destructive" }); }
-    finally { setLoading(false); }
-  };
+  const handleSearch = () => fetchFarmers(0, searchQuery);
 
   if (isLoading) {
     return <div className="min-h-screen flex items-center justify-center"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div></div>;
@@ -64,7 +71,7 @@ const AdminFarmerList = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-primary/10 via-background to-accent/10">
-      <AppNavbar title="সকল কৃষক" subtitle="All Farmers (Admin)" navItems={adminNavItems} rightContent={<div className="flex gap-2 items-center"><PumpSelector /><Button size="sm" variant="outline" onClick={fetchFarmers}><RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} /></Button></div>} />
+      <AppNavbar title="সকল কৃষক" subtitle="All Farmers (Admin)" navItems={adminNavItems} rightContent={<div className="flex gap-2 items-center"><PumpSelector /><Button size="sm" variant="outline" onClick={() => fetchFarmers(0)}><RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} /></Button></div>} />
 
       <main className="max-w-7xl mx-auto p-4 md:p-6 space-y-6">
         <Card>
@@ -72,13 +79,13 @@ const AdminFarmerList = () => {
             <div className="flex gap-2">
               <Input placeholder="নাম, মোবাইল বা কোড দিয়ে খুঁজুন..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} onKeyDown={(e) => e.key === "Enter" && handleSearch()} />
               <Button variant="outline" size="icon" onClick={handleSearch}><Search className="w-4 h-4" /></Button>
-              <Button variant="outline" size="icon" onClick={fetchFarmers}><RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} /></Button>
+              <Button variant="outline" size="icon" onClick={() => fetchFarmers(0)}><RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} /></Button>
             </div>
           </CardContent>
         </Card>
 
         <Card>
-          <CardHeader><CardTitle>কৃষক তালিকা ({farmers.length})</CardTitle></CardHeader>
+          <CardHeader><CardTitle>কৃষক তালিকা ({totalElements})</CardTitle></CardHeader>
           <CardContent>
             {loading ? (
               <div className="flex justify-center py-8"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div></div>
@@ -115,6 +122,13 @@ const AdminFarmerList = () => {
                     ))}
                   </TableBody>
                 </Table>
+                <PaginationBar
+                  currentPage={currentPage}
+                  totalPages={totalPages}
+                  totalElements={totalElements}
+                  pageSize={PAGE_SIZE}
+                  onPageChange={fetchFarmers}
+                />
               </div>
             )}
           </CardContent>

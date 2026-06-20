@@ -19,14 +19,9 @@ import { farmerApi } from "@/lib/api/client";
 import { Loader2 } from "lucide-react";
 import AppNavbar from "@/components/AppNavbar";
 import PumpSelector from "@/components/PumpSelector";
+import { userNavItems } from "@/lib/navItems";
 
-const userNavItems = [
-  { label: "ড্যাশবোর্ড", path: "/user/dashboard" },
-  { label: "কৃষক", path: "/user/farmers" },
-  { label: "মৌসুম", path: "/user/seasons" },
-  { label: "জমি", path: "/user/lands" },
-  { label: "ইউনিট মূল্য", path: "/user/unit-prices" },
-];
+
 
 const createFarmerSchema = z.object({
   nameBengali: z.string().min(1, "Bengali name is required").max(100),

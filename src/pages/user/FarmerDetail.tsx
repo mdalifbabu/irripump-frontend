@@ -18,19 +18,16 @@ import type { Farmer, FarmerLandAssignment, Payment, UnitPrice, Season, FarmerDe
 import { CreditCard, Map, Phone, Mail, MapPin, Pencil, Trash2, Loader2, TrendingUp, TrendingDown, FileDown } from "lucide-react";
 import AppNavbar from "@/components/AppNavbar";
 import PumpSelector from "@/components/PumpSelector";
+import PaginationBar from "@/components/PaginationBar";
+import { userNavItems } from "@/lib/navItems";
 
-const userNavItems = [
-  { label: "ড্যাশবোর্ড", path: "/user/dashboard" },
-  { label: "কৃষক", path: "/user/farmers" },
-  { label: "মৌসুম", path: "/user/seasons" },
-  { label: "জমি", path: "/user/lands" },
-  { label: "ইউনিট মূল্য", path: "/user/unit-prices" },
-];
+const PAY_PAGE_SIZE = 10;
+
+
 
 interface SeasonSummary {
   season: Season;
   assignments: FarmerLandAssignment[];
-  totalLandBigha: number;
   totalLandShatak: number;
   totalPaid: number;
   calculatedCost: number;
@@ -45,6 +42,9 @@ const FarmerDetail = () => {
   const [allSeasons, setAllSeasons] = useState<Season[]>([]);
   const [seasonSummaries, setSeasonSummaries] = useState<SeasonSummary[]>([]);
   const [payments, setPayments] = useState<Payment[]>([]);
+  const [payTotalElements, setPayTotalElements] = useState(0);
+  const [payCurrentPage, setPayCurrentPage] = useState(0);
+  const [payTotalPages, setPayTotalPages] = useState(0);
   const [unitPrices, setUnitPrices] = useState<UnitPrice[]>([]);
   const [loading, setLoading] = useState(true);
   const [downloading, setDownloading] = useState(false);
@@ -65,6 +65,17 @@ const FarmerDetail = () => {
     if (farmerId && pumpId && season && year) fetchData();
   }, [pumpId, season, year]);
 
+  const fetchPayments = async (page: number) => {
+    if (!farmerId) return;
+    try {
+      const result = await paymentApi.getByFarmerPaged(parseInt(farmerId!), page, PAY_PAGE_SIZE);
+      setPayments(result.content);
+      setPayCurrentPage(result.number);
+      setPayTotalPages(result.totalPages);
+      setPayTotalElements(result.totalElements);
+    } catch { /* non-critical */ }
+  };
+
   const fetchData = async () => {
     if (!pumpId || !farmerId) return;
     setLoading(true);
@@ -72,12 +83,15 @@ const FarmerDetail = () => {
       const [f, allS, p, up] = await Promise.all([
         farmerApi.getById(parseInt(farmerId!)),
         seasonApi.getActive(),
-        paymentApi.getByFarmer(parseInt(farmerId!)),
+        paymentApi.getByFarmerPaged(parseInt(farmerId!), 0, PAY_PAGE_SIZE),
         unitPriceApi.getByPump(pumpId),
       ]);
       setFarmer(f);
       setAllSeasons(allS);
-      setPayments(p);
+      setPayments(p.content);
+      setPayCurrentPage(p.number);
+      setPayTotalPages(p.totalPages);
+      setPayTotalElements(p.totalElements);
       setUnitPrices(up);
 
       // Fetch backend-calculated cost/due for the current season
@@ -96,20 +110,17 @@ const FarmerDetail = () => {
           const asgn = await assignmentApi.getByFarmer(parseInt(farmerId!), pumpId, s.id, s.year);
           if (asgn.length > 0) {
             const totalLandShatak = asgn.reduce((acc, a) => {
-              const lb = a.assignedSizeBigha ?? a.landSizeBigha ?? 0;
               const ls = a.assignedSizeShatak ?? a.landSizeShatak ?? 0;
-              return acc + lb * 33 + ls;
+              return acc + ls;
             }, 0);
-            const totalLandBigha = totalLandShatak / 33;
             const up_match = up.find(u => u.season === s.seasonName && u.year === s.year)
               ?? up.find(u => u.isActive) ?? up[0];
             const pricePerShatak = up_match?.pricePerShatak ?? 0;
             const calculatedCost = totalLandShatak * pricePerShatak;
-            const totalPaid = p.filter(pay => pay.paymentType === "PAYMENT" || pay.paymentType === "ADJUSTMENT")
-              .reduce((acc, pay) => acc + pay.amount, 0);
+            const totalPaid = 0; // backend-calculated via farmerDetail; season summaries use it for layout only
             const due = Math.max(0, calculatedCost - totalPaid);
-            const advance = calculatedCost < totalPaid ? totalPaid - calculatedCost : 0;
-            summaries.push({ season: s, assignments: asgn, totalLandBigha, totalLandShatak, totalPaid, calculatedCost, due, advance });
+            const advance = 0;
+            summaries.push({ season: s, assignments: asgn, totalLandShatak, totalPaid, calculatedCost, due, advance });
           }
         } catch { /* skip season if error */ }
       }
@@ -160,19 +171,17 @@ const FarmerDetail = () => {
     }
   };
 
+
   const handleDownloadInvoice = async () => {
-    // Invoices are per-payment now (no more server-rendered binary) — default to the
-    // farmer's most recent payment, which is what "download invoice" meant here before.
-    const latestPayment = payments[0];
+    const latestPayment = payments[0]; // page 0, ordered DESC → most recent
     if (!latestPayment) {
-      toast({ title: "কোনো পেমেন্ট নেই", description: "ইনভয়েস তৈরি করার জন্য অন্তত একটি পেমেন্ট প্রয়োজন", variant: "destructive" });
+      toast({ title: "কোনো পেমেন্ট নেই", description: "ইনভয়েস তৈরির জন্য অন্তত একটি পেমেন্ট প্রয়োজন", variant: "destructive" });
       return;
     }
     setDownloading(true);
     try {
       const data = await invoiceApi.get(latestPayment.id);
-      buildInvoicePdf(data).save(`invoice-${data.invoiceNo}.pdf`);
-      toast({ title: "Invoice downloaded" });
+      buildInvoicePdf(data).save(`invoice_${data.farmer.identifier}_${data.invoiceNo}.pdf`);
     } catch (e: any) {
       toast({ title: "Error", description: e.message || "Failed to download invoice", variant: "destructive" });
     } finally {
@@ -180,13 +189,10 @@ const FarmerDetail = () => {
     }
   };
 
-  const totalPaidAll = payments.filter(p => p.paymentType === "PAYMENT" || p.paymentType === "ADJUSTMENT")
-    .reduce((s, p) => s + p.amount, 0);
   const currentSummary = seasonSummaries.find(s => s.season.seasonName.toUpperCase() === season.toUpperCase() && s.season.year === year);
 
-  // Use backend-calculated values when available, fall back to client-side
   const backendCost = farmerDetail?.calculatedCost ?? currentSummary?.calculatedCost ?? 0;
-  const backendPaid = farmerDetail?.totalPaid ?? totalPaidAll;
+  const backendPaid = farmerDetail?.totalPaid ?? 0;
   const backendDue = farmerDetail?.dueAmount ?? currentSummary?.due ?? 0;
   const backendAdvance = farmerDetail?.advanceAmount ?? currentSummary?.advance ?? 0;
 
@@ -217,7 +223,8 @@ const FarmerDetail = () => {
             <CardContent className="pt-4">
               <p className="text-xs text-muted-foreground">বর্তমান মৌসুম</p>
               <p className="text-lg font-bold">{season}/{year}</p>
-              <p className="text-sm">{farmerDetail?.landCount != null ? `${farmerDetail.landCount} জমি` : currentSummary ? `${currentSummary.totalLandShatak.toFixed(0)} শতক` : "তথ্য নেই"}</p>
+              <p className="text-sm">{farmerDetail?.landCount != null ? `${farmerDetail.landCount} জমি` : currentSummary ? `${currentSummary.totalLandShatak.toFixed(2)} শতক` : "তথ্য নেই"}</p>
+              {currentSummary && <p className="text-xs text-muted-foreground">{(currentSummary.totalLandShatak/33).toFixed(3)} বিঘা</p>}
             </CardContent>
           </Card>
           <Card>
@@ -231,7 +238,7 @@ const FarmerDetail = () => {
             <CardContent className="pt-4">
               <p className="text-xs text-muted-foreground">মোট পরিশোধ</p>
               <p className="text-lg font-bold text-green-600">৳{backendPaid.toFixed(0)}</p>
-              <p className="text-xs text-muted-foreground">{payments.length} লেনদেন</p>
+              <p className="text-xs text-muted-foreground">{payTotalElements} লেনদেন</p>
             </CardContent>
           </Card>
           <Card>
@@ -283,31 +290,24 @@ const FarmerDetail = () => {
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead>জমি ID</TableHead>
                         <TableHead>দাগ নম্বর</TableHead>
-                        <TableHead>বিঘা</TableHead>
-                        <TableHead>শতক</TableHead>
-                        <TableHead>মোট (বিঘা)</TableHead>
+                        <TableHead>শতক / বিঘা</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {currentSummary.assignments.map(a => {
-                        const lb = a.assignedSizeBigha ?? a.landSizeBigha ?? 0;
                         const ls = a.assignedSizeShatak ?? a.landSizeShatak ?? 0;
                         return (
                           <TableRow key={a.id}>
-                            <TableCell className="font-mono">{a.landIdentificationNumber}</TableCell>
                             <TableCell>{a.landmarkNumber}</TableCell>
-                            <TableCell>{lb.toFixed(2)}</TableCell>
-                            <TableCell>{ls.toFixed(2)}</TableCell>
-                            <TableCell className="font-bold">{(lb + ls / 33).toFixed(3)}</TableCell>
+                            <TableCell className="font-bold">{ls.toFixed(2)} শতক<br/><span className="text-xs text-muted-foreground font-normal">{(ls/33).toFixed(3)} বিঘা</span></TableCell>
                           </TableRow>
                         );
                       })}
                     </TableBody>
                   </Table>
                   <div className="mt-4 grid grid-cols-2 md:grid-cols-4 gap-3 pt-4 border-t">
-                    <div><p className="text-xs text-muted-foreground">মোট জমি</p><p className="font-bold">{currentSummary.totalLandShatak.toFixed(0)} শতক</p></div>
+                    <div><p className="text-xs text-muted-foreground">মোট জমি</p><p className="font-bold">{currentSummary.totalLandShatak.toFixed(2)} শতক</p><p className="text-xs text-muted-foreground">{(currentSummary.totalLandShatak/33).toFixed(3)} বিঘা</p></div>
                     <div><p className="text-xs text-muted-foreground">খরচ (ব্যাকএন্ড)</p><p className="font-bold text-blue-600">৳{backendCost.toFixed(2)}</p></div>
                     <div><p className="text-xs text-muted-foreground">পরিশোধ</p><p className="font-bold text-green-600">৳{backendPaid.toFixed(2)}</p></div>
                     <div>
@@ -346,7 +346,7 @@ const FarmerDetail = () => {
                   <CardContent>
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
                       <div><p className="text-muted-foreground">জমি</p><p className="font-bold">{ss.assignments.length} পিস</p></div>
-                      <div><p className="text-muted-foreground">মোট শতক</p><p className="font-bold">{ss.totalLandShatak.toFixed(0)}</p></div>
+                      <div><p className="text-muted-foreground">মোট জমি</p><p className="font-bold">{ss.totalLandShatak.toFixed(2)} শতক</p><p className="text-xs text-muted-foreground">{(ss.totalLandShatak/33).toFixed(3)} বিঘা</p></div>
                       <div><p className="text-muted-foreground">খরচ</p><p className="font-bold text-blue-600">৳{ss.calculatedCost.toFixed(0)}</p></div>
                       <div><p className="text-muted-foreground">পরিশোধ</p><p className="font-bold text-green-600">৳{ss.totalPaid.toFixed(0)}</p></div>
                     </div>
@@ -361,7 +361,7 @@ const FarmerDetail = () => {
             <Card>
               <CardHeader>
                 <div className="flex items-center justify-between">
-                  <CardTitle>পেমেন্ট ইতিহাস ({payments.length})</CardTitle>
+                  <CardTitle>পেমেন্ট ইতিহাস ({payTotalElements}টি)</CardTitle>
                   <Button size="sm" onClick={() => navigate(`/user/farmers/${farmerId}/payments`)}>
                     <CreditCard className="w-4 h-4 mr-1" />পরিচালনা
                   </Button>
@@ -392,6 +392,13 @@ const FarmerDetail = () => {
                         ))}
                       </TableBody>
                     </Table>
+                    <PaginationBar
+                      currentPage={payCurrentPage}
+                      totalPages={payTotalPages}
+                      totalElements={payTotalElements}
+                      pageSize={PAY_PAGE_SIZE}
+                      onPageChange={fetchPayments}
+                    />
                   </div>
                 )}
               </CardContent>

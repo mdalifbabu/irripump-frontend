@@ -102,9 +102,8 @@ const AdminLandList = () => {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>পরিচয় নম্বর</TableHead>
                       <TableHead>দাগ/খতিয়ান</TableHead>
-                      <TableHead>মোট শতক</TableHead>
+                      <TableHead>শতক / বিঘা</TableHead>
                       <TableHead>ট্যাগ</TableHead>
                       <TableHead>বরাদ্দ অবস্থা</TableHead>
                       <TableHead>কৃষক</TableHead>
@@ -112,13 +111,11 @@ const AdminLandList = () => {
                   </TableHeader>
                   <TableBody>
                     {lands.filter(l => l.isActive).map((land) => {
-                      const totalShatak = (land.sizeBigha ?? 0) * 33 + (land.sizeShatak ?? 0);
                       const asgn = getAssignment(land.id);
                       return (
                         <TableRow key={land.id}>
-                          <TableCell className="font-medium">{land.landIdentificationNumber}</TableCell>
                           <TableCell>{land.landmarkNumber}</TableCell>
-                          <TableCell className="font-bold text-primary">{totalShatak.toFixed(0)} শতক</TableCell>
+                          <TableCell className="font-bold text-primary">{(land.sizeShatak ?? 0).toFixed(2)} শতক<br/><span className="text-xs text-muted-foreground font-normal">{((land.sizeShatak ?? 0)/33).toFixed(3)} বিঘা</span></TableCell>
                           <TableCell className="text-sm text-muted-foreground">{land.tag ?? "-"}</TableCell>
                           <TableCell>
                             <Badge variant={asgn ? "default" : "outline"}>
@@ -156,25 +153,18 @@ const AdminLandList = () => {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>পরিচয় নম্বর</TableHead>
                       <TableHead>দাগ/খতিয়ান</TableHead>
-                      <TableHead>বিঘা</TableHead>
-                      <TableHead>শতক</TableHead>
-                      <TableHead>মোট শতক</TableHead>
+                      <TableHead>শতক / বিঘা</TableHead>
                       <TableHead>ট্যাগ</TableHead>
                       <TableHead>অবস্থা</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {lands.map((land) => {
-                      const totalShatak = (land.sizeBigha ?? 0) * 33 + (land.sizeShatak ?? 0);
                       return (
                         <TableRow key={land.id}>
-                          <TableCell className="font-medium">{land.landIdentificationNumber}</TableCell>
                           <TableCell>{land.landmarkNumber}</TableCell>
-                          <TableCell>{land.sizeBigha?.toFixed(2)}</TableCell>
-                          <TableCell>{land.sizeShatak?.toFixed(2)}</TableCell>
-                          <TableCell className="font-bold text-primary">{totalShatak.toFixed(0)} শতক</TableCell>
+                          <TableCell className="font-bold text-primary">{(land.sizeShatak ?? 0).toFixed(2)} শতক<br/><span className="text-xs text-muted-foreground font-normal">{((land.sizeShatak ?? 0)/33).toFixed(3)} বিঘা</span></TableCell>
                           <TableCell className="text-sm text-muted-foreground">{land.tag ?? "-"}</TableCell>
                           <TableCell>
                             <Badge variant={land.isActive ? "default" : "secondary"}>

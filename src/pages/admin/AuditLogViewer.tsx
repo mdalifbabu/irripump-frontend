@@ -4,13 +4,14 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { auditLogApi } from "@/lib/api/client";
-import type { AuditLogEntry } from "@/lib/api/types";
-import { RefreshCw, Search } from "lucide-react";
+import type { AuditLogEntry, PageResponse } from "@/lib/api/types";
+import { ChevronLeft, ChevronRight, RefreshCw, Search } from "lucide-react";
 import AppNavbar from "@/components/AppNavbar";
 
 const adminNavItems = [
@@ -23,11 +24,15 @@ const adminNavItems = [
   { label: "সেটিংস", path: "/admin/settings" },
 ];
 
+const PAGE_SIZE = 50;
+
 const AuditLogViewer = () => {
-  const [logs, setLogs] = useState<AuditLogEntry[]>([]);
+  const [page, setPage] = useState<PageResponse<AuditLogEntry>>({ content: [], totalElements: 0, totalPages: 0, number: 0, size: PAGE_SIZE, last: true });
+  const [currentPage, setCurrentPage] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [tableNames, setTableNames] = useState<string[]>([]);
   const [actorId, setActorId] = useState("");
-  const [entityType, setEntityType] = useState("");
+  const [entityType, setEntityType] = useState("ALL");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const navigate = useNavigate();
@@ -40,21 +45,39 @@ const AuditLogViewer = () => {
       toast({ title: "Access Denied", variant: "destructive" });
       navigate("/auth"); return;
     }
-    if (!isLoading && isAuthenticated) fetchLogs();
-  }, [isLoading, isAuthenticated, user, navigate, toast]);
+    if (!isLoading && isAuthenticated) {
+      fetchTableNames();
+      fetchLogs(0);
+    }
+  }, [isLoading, isAuthenticated, user]);
 
-  const fetchLogs = async () => {
+  const fetchTableNames = async () => {
+    try {
+      setTableNames(await auditLogApi.getTableNames());
+    } catch { /* non-critical */ }
+  };
+
+  const fetchLogs = async (pg: number) => {
     setLoading(true);
     try {
-      setLogs(await auditLogApi.search({
+      const result = await auditLogApi.search({
         actorId: actorId ? Number(actorId) : undefined,
-        entityType: entityType || undefined,
+        entityType: entityType === "ALL" ? undefined : entityType,
         from: from || undefined,
         to: to || undefined,
-      }));
-    } catch { toast({ title: "Error", description: "Failed to fetch audit log", variant: "destructive" }); }
-    finally { setLoading(false); }
+        page: pg,
+        size: PAGE_SIZE,
+      });
+      setPage(result);
+      setCurrentPage(pg);
+    } catch {
+      toast({ title: "Error", description: "Failed to fetch audit log", variant: "destructive" });
+    } finally { setLoading(false); }
   };
+
+  const handleSearch = () => fetchLogs(0);
+  const handlePrev = () => { if (currentPage > 0) fetchLogs(currentPage - 1); };
+  const handleNext = () => { if (!page.last) fetchLogs(currentPage + 1); };
 
   if (isLoading) {
     return <div className="min-h-screen flex items-center justify-center"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div></div>;
@@ -66,26 +89,47 @@ const AuditLogViewer = () => {
         title="অডিট লগ"
         subtitle="Audit Log (read-only)"
         navItems={adminNavItems}
-        rightContent={<Button size="sm" variant="outline" onClick={fetchLogs} disabled={loading}><RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} /></Button>}
+        rightContent={<Button size="sm" variant="outline" onClick={() => fetchLogs(currentPage)} disabled={loading}><RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} /></Button>}
       />
 
       <main className="max-w-7xl mx-auto p-4 md:p-6 space-y-6">
         <Card>
           <CardContent className="pt-6 grid grid-cols-2 md:grid-cols-5 gap-3">
-            <div><Label className="text-xs">Actor ID</Label><Input value={actorId} onChange={(e) => setActorId(e.target.value)} placeholder="e.g. 5" /></div>
-            <div><Label className="text-xs">Entity (table)</Label><Input value={entityType} onChange={(e) => setEntityType(e.target.value)} placeholder="e.g. payments" /></div>
+            <div>
+              <Label className="text-xs">Actor ID</Label>
+              <Input value={actorId} onChange={(e) => setActorId(e.target.value)} placeholder="e.g. 5" />
+            </div>
+            <div>
+              <Label className="text-xs">Entity (table)</Label>
+              <Select value={entityType} onValueChange={setEntityType}>
+                <SelectTrigger><SelectValue placeholder="All tables" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="ALL">All tables</SelectItem>
+                  {tableNames.map((t) => (
+                    <SelectItem key={t} value={t}>{t}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
             <div><Label className="text-xs">From</Label><Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} /></div>
             <div><Label className="text-xs">To</Label><Input type="date" value={to} onChange={(e) => setTo(e.target.value)} /></div>
-            <div className="flex items-end"><Button className="w-full" onClick={fetchLogs}><Search className="w-4 h-4 mr-1" />খুঁজুন</Button></div>
+            <div className="flex items-end"><Button className="w-full" onClick={handleSearch}><Search className="w-4 h-4 mr-1" />খুঁজুন</Button></div>
           </CardContent>
         </Card>
 
         <Card>
-          <CardHeader><CardTitle>লগ এন্ট্রি ({logs.length})</CardTitle></CardHeader>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <CardTitle>লগ এন্ট্রি ({page.totalElements})</CardTitle>
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <span>পাতা {currentPage + 1} / {Math.max(page.totalPages, 1)}</span>
+              <Button size="sm" variant="outline" onClick={handlePrev} disabled={currentPage === 0 || loading}><ChevronLeft className="w-4 h-4" /></Button>
+              <Button size="sm" variant="outline" onClick={handleNext} disabled={page.last || loading}><ChevronRight className="w-4 h-4" /></Button>
+            </div>
+          </CardHeader>
           <CardContent>
             {loading ? (
               <div className="flex justify-center py-8"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div></div>
-            ) : logs.length === 0 ? (
+            ) : page.content.length === 0 ? (
               <p className="text-center py-8 text-muted-foreground">কোনো এন্ট্রি পাওয়া যায়নি।</p>
             ) : (
               <div className="overflow-x-auto">
@@ -101,7 +145,7 @@ const AuditLogViewer = () => {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {logs.map((log) => (
+                    {page.content.map((log) => (
                       <TableRow key={log.id}>
                         <TableCell className="text-xs whitespace-nowrap">{new Date(log.timestamp).toLocaleString()}</TableCell>
                         <TableCell>

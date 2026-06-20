@@ -20,14 +20,12 @@ import type { SeasonEnrollmentResponse, Farmer } from "@/lib/api/types";
 import { Plus, Search, RefreshCw, Trash2, UserPlus, Users } from "lucide-react";
 import AppNavbar from "@/components/AppNavbar";
 import PumpSelector from "@/components/PumpSelector";
+import PaginationBar from "@/components/PaginationBar";
+import { userNavItems } from "@/lib/navItems";
 
-const userNavItems = [
-  { label: "ড্যাশবোর্ড", path: "/user/dashboard" },
-  { label: "কৃষক", path: "/user/farmers" },
-  { label: "মৌসুম", path: "/user/seasons" },
-  { label: "জমি", path: "/user/lands" },
-  { label: "ইউনিট মূল্য", path: "/user/unit-prices" },
-];
+const FARMER_PAGE_SIZE = 20;
+
+
 
 const createSchema = z.object({
   nameBengali: z.string().min(1, "বাংলা নাম আবশ্যক"),
@@ -44,6 +42,7 @@ const FarmerList = () => {
   const [enrolled, setEnrolled] = useState<SeasonEnrollmentResponse[]>([]);
   const [available, setAvailable] = useState<Farmer[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
+  const [farmerPage, setFarmerPage] = useState(0);
   const [enrollSearch, setEnrollSearch] = useState("");
   const [loading, setLoading] = useState(false);
   const [showEnrollDialog, setShowEnrollDialog] = useState(false);
@@ -158,6 +157,8 @@ const FarmerList = () => {
     const q = searchQuery.toLowerCase();
     return !q || e.nameBengali.toLowerCase().includes(q) || e.mobile.includes(q) || e.farmerCode.includes(q);
   });
+  const farmerTotalPages = Math.ceil(filtered.length / FARMER_PAGE_SIZE);
+  const pagedFiltered = filtered.slice(farmerPage * FARMER_PAGE_SIZE, (farmerPage + 1) * FARMER_PAGE_SIZE);
 
   const filteredAvailable = available.filter(f => {
     const q = enrollSearch.toLowerCase();
@@ -197,7 +198,7 @@ const FarmerList = () => {
             <Card>
               <CardContent className="pt-4">
                 <div className="flex gap-2">
-                  <Input placeholder="নাম, মোবাইল বা কোড দিয়ে খুঁজুন..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
+                  <Input placeholder="নাম, মোবাইল বা কোড দিয়ে খুঁজুন..." value={searchQuery} onChange={(e) => { setSearchQuery(e.target.value); setFarmerPage(0); }} />
                   <Button variant="outline" size="icon" onClick={fetchEnrolled}><RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} /></Button>
                 </div>
               </CardContent>
@@ -206,6 +207,7 @@ const FarmerList = () => {
             <Card>
               <CardHeader>
                 <CardTitle>নথিভুক্ত কৃষক — {season}/{year} ({filtered.length})</CardTitle>
+
               </CardHeader>
               <CardContent>
                 {loading ? (
@@ -220,7 +222,7 @@ const FarmerList = () => {
                   <>
                     {/* Mobile cards */}
                     <div className="md:hidden space-y-3">
-                      {filtered.map((e) => (
+                      {pagedFiltered.map((e) => (
                         <Card key={e.enrollmentId}>
                           <CardContent className="p-4">
                             <div className="flex justify-between items-start" onClick={() => navigate(`/user/farmers/${e.farmerId}`)}>
@@ -263,7 +265,7 @@ const FarmerList = () => {
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          {filtered.map((e) => (
+                          {pagedFiltered.map((e) => (
                             <TableRow key={e.enrollmentId}>
                               <TableCell className="font-mono text-sm">{e.farmerCode}</TableCell>
                               <TableCell className="font-medium">{e.nameBengali}</TableCell>
@@ -290,6 +292,13 @@ const FarmerList = () => {
                         </TableBody>
                       </Table>
                     </div>
+                    <PaginationBar
+                      currentPage={farmerPage}
+                      totalPages={farmerTotalPages}
+                      totalElements={filtered.length}
+                      pageSize={FARMER_PAGE_SIZE}
+                      onPageChange={setFarmerPage}
+                    />
                   </>
                 )}
               </CardContent>

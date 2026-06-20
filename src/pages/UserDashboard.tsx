@@ -11,13 +11,7 @@ import type { YearlyDashboard } from "@/lib/api/types";
 import { Users, DollarSign, TrendingDown, TrendingUp } from "lucide-react";
 import AppNavbar from "@/components/AppNavbar";
 import PumpSelector from "@/components/PumpSelector";
-
-const userNavItems = [
-  { label: "ড্যাশবোর্ড", path: "/user/dashboard" },
-  { label: "কৃষক", path: "/user/farmers" },
-  { label: "মৌসুম", path: "/user/seasons" },
-  { label: "ইউনিট মূল্য", path: "/user/unit-prices" },
-];
+import { userNavItems } from "@/lib/navItems";
 
 const UserDashboard = () => {
   const [yearly, setYearly] = useState<YearlyDashboard | null>(null);

@@ -1,14 +1,14 @@
 import type {
   AuthResponse, User, Pump, Farmer, Land, UnitPrice, Payment, DashboardStats,
   Setting, FarmerPortalData, LoginRequest, RefreshTokenRequest, CreateUserRequest,
-  UpdateUserRequest, CreatePumpRequest, CreateFarmerRequest, CreateLandRequest,
+  UpdateUserRequest, CreatePumpRequest, CreateFarmerRequest, CreateLandRequest, UpdateLandRequest,
   CreateUnitPriceRequest, UpdateUnitPriceRequest, CreatePaymentRequest, UpdatePaymentRequest,
   VerifyFarmerCodeRequest, CreateSettingRequest, FarmerLandAssignment, Season,
   AssignLandRequest, FarmerSummaryResponse, FarmerDetailResponse, CreateSeasonRequest,
   SeasonEnrollmentResponse, SeasonDashboard, LedgerResponse,
   SeasonType, CreateSeasonTypeRequest, UpdateSeasonTypeRequest,
   AdminDashboardGroupBy, AdminDashboardResponse, AdjustDueRequest, ReasonRequest,
-  DueEntry, AuditLogEntry, AuditLogSearchParams, InvoiceResponse, YearlyDashboard,
+  DueEntry, AuditLogEntry, AuditLogSearchParams, PageResponse, PaymentResponse, InvoiceResponse, YearlyDashboard,
 } from "./types";
 
 //const API_BASE_URL = "http://localhost:8081/api";
@@ -146,6 +146,14 @@ export const adminApi = {
     if (query) params.append("query", query);
     return apiRequest<Farmer[]>(`/admin/farmers?${params}`);
   },
+  getFarmersPaged: async (pumpId: number | undefined, query: string, page: number, size: number): Promise<PageResponse<Farmer>> => {
+    const params = new URLSearchParams({ page: String(page), size: String(size) });
+    if (pumpId) params.append("pumpId", String(pumpId));
+    if (query) params.append("query", query);
+    return apiRequest<PageResponse<Farmer>>(`/admin/farmers/paged?${params}`);
+  },
+  updateCodePrefix: async (pumpId: number, prefix: string): Promise<Pump> =>
+    apiRequest<Pump>(`/admin/pumps/${pumpId}/code-prefix`, { method: "PATCH", body: JSON.stringify({ prefix }) }),
 };
 
 // Pump API
@@ -196,8 +204,13 @@ export const landApi = {
     apiRequest<Land[]>(`/lands/available?pumpId=${pumpId}&seasonId=${seasonId}&year=${year}`),
   search: async (pumpId: number, query: string): Promise<Land[]> =>
     apiRequest<Land[]>(`/lands/search?pumpId=${pumpId}&query=${encodeURIComponent(query)}`),
+  getByPumpPaged: async (pumpId: number, page: number, size: number, query?: string): Promise<PageResponse<Land>> => {
+    const qs = new URLSearchParams({ pumpId: String(pumpId), page: String(page), size: String(size) });
+    if (query) qs.append("query", query);
+    return apiRequest<PageResponse<Land>>(`/lands/paged?${qs}`);
+  },
   getById: async (id: number): Promise<Land> => apiRequest<Land>(`/lands/${id}`),
-  update: async (id: number, data: Partial<CreateLandRequest>): Promise<Land> =>
+  update: async (id: number, data: UpdateLandRequest): Promise<Land> =>
     apiRequest<Land>(`/lands/${id}`, { method: "PUT", body: JSON.stringify(data) }),
   delete: async (id: number): Promise<void> =>
     apiRequest<void>(`/lands/${id}`, { method: "DELETE" }),
@@ -210,7 +223,7 @@ export const adminLandApi = {
   getByPump: async (pumpId: number): Promise<Land[]> =>
     apiRequest<Land[]>(`/admin/lands?pumpId=${pumpId}`),
   getById: async (id: number): Promise<Land> => apiRequest<Land>(`/admin/lands/${id}`),
-  update: async (id: number, data: Partial<CreateLandRequest>): Promise<Land> =>
+  update: async (id: number, data: UpdateLandRequest): Promise<Land> =>
     apiRequest<Land>(`/admin/lands/${id}`, { method: "PUT", body: JSON.stringify(data) }),
   delete: async (id: number): Promise<void> =>
     apiRequest<void>(`/admin/lands/${id}`, { method: "DELETE" }),
@@ -302,10 +315,26 @@ export const paymentApi = {
     apiRequest<Payment>(`/payments/${id}/update`, { method: "PUT", body: JSON.stringify(data) }),
   getByFarmer: async (farmerId: number): Promise<Payment[]> =>
     apiRequest<Payment[]>(`/payments/farmer/${farmerId}`),
+  getByFarmerPaged: async (farmerId: number, page: number, size: number): Promise<PageResponse<Payment>> => {
+    const qs = new URLSearchParams({ page: String(page), size: String(size) });
+    return apiRequest<PageResponse<Payment>>(`/payments/farmer/${farmerId}/paged?${qs}`);
+  },
   delete: async (id: number): Promise<void> =>
     apiRequest<void>(`/payments/${id}`, { method: "DELETE" }),
   getTotalPaid: async (farmerId: number): Promise<number> =>
     apiRequest<number>(`/payments/farmer/${farmerId}/total`),
+  getByPump: async (pumpId: number): Promise<Payment[]> =>
+    apiRequest<Payment[]>(`/payments/pump/${pumpId}`),
+  getByPumpPaged: async (
+    pumpId: number, page: number, size: number,
+    filters?: { farmerName?: string; paymentDate?: string; reference?: string }
+  ): Promise<PageResponse<PaymentResponse>> => {
+    const qs = new URLSearchParams({ pumpId: String(pumpId), page: String(page), size: String(size) });
+    if (filters?.farmerName) qs.append("farmerName", filters.farmerName);
+    if (filters?.paymentDate) qs.append("paymentDate", filters.paymentDate);
+    if (filters?.reference) qs.append("reference", filters.reference);
+    return apiRequest<PageResponse<PaymentResponse>>(`/payments/pump/${pumpId}/paged?${qs}`);
+  },
 };
 
 // Dashboard API
@@ -361,14 +390,18 @@ export const adminOverrideApi = {
 
 // Read-only audit log
 export const auditLogApi = {
-  search: async (params: AuditLogSearchParams): Promise<AuditLogEntry[]> => {
+  search: async (params: AuditLogSearchParams): Promise<PageResponse<AuditLogEntry>> => {
     const qs = new URLSearchParams();
     if (params.actorId) qs.append("actorId", String(params.actorId));
     if (params.entityType) qs.append("entityType", params.entityType);
     if (params.from) qs.append("from", params.from);
     if (params.to) qs.append("to", params.to);
-    return apiRequest<AuditLogEntry[]>(`/admin/audit?${qs}`);
+    qs.append("page", String(params.page ?? 0));
+    qs.append("size", String(params.size ?? 50));
+    return apiRequest<PageResponse<AuditLogEntry>>(`/admin/audit?${qs}`);
   },
+  getTableNames: async (): Promise<string[]> =>
+    apiRequest<string[]>("/admin/audit/tables"),
 };
 
 // Season Enrollment API
@@ -447,6 +480,8 @@ export const farmerPortalApi = {
 
 // Ledger API
 export const ledgerApi = {
-  getLedger: async (farmerId: number): Promise<LedgerResponse> =>
-    apiRequest<LedgerResponse>(`/farmers/${farmerId}/ledger`),
+  getLedger: async (farmerId: number, seasonId?: number): Promise<LedgerResponse> => {
+    const qs = seasonId ? `?seasonId=${seasonId}` : "";
+    return apiRequest<LedgerResponse>(`/farmers/${farmerId}/ledger${qs}`);
+  },
 };

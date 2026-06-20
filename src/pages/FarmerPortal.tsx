@@ -157,9 +157,8 @@ const FarmerPortal = () => {
                   <TableBody>
                     {farmerData.lands.map((land) => (
                       <TableRow key={land.id}>
-                        <TableCell>{land.landIdentificationNumber}</TableCell>
                         <TableCell>{land.landmarkNumber}</TableCell>
-                        <TableCell><span className="font-bold">{(land.sizeBigha * 33 + land.sizeShatak).toFixed(1)} শতক</span><br /><span className="text-xs text-muted-foreground">{(land.sizeBigha + land.sizeShatak / 33).toFixed(3)} বিঘা</span></TableCell>
+                        <TableCell><span className="font-bold">{(land.sizeShatak ?? 0).toFixed(2)} শতক</span><br/><span className="text-xs text-muted-foreground">{((land.sizeShatak ?? 0)/33).toFixed(3)} বিঘা</span></TableCell>
                         <TableCell>
                           {farmerData.currentSeasonId ? (
                             <Badge variant="outline" className="text-primary border-primary">
