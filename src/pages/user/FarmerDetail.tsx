@@ -56,7 +56,7 @@ const FarmerDetail = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const { isAuthenticated, isLoading } = useAuth();
-  const { pumpId, season, year } = usePumpContext();
+  const { pumpId, season, year, selectedSeason } = usePumpContext();
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) { navigate("/auth"); return; }
@@ -70,7 +70,7 @@ const FarmerDetail = () => {
   const fetchPayments = async (page: number) => {
     if (!farmerId) return;
     try {
-      const result = await paymentApi.getByFarmerPaged(parseInt(farmerId!), page, PAY_PAGE_SIZE);
+      const result = await paymentApi.getByFarmerPaged(parseInt(farmerId!), page, PAY_PAGE_SIZE, selectedSeason?.id);
       setPayments(result.content);
       setPayCurrentPage(result.number);
       setPayTotalPages(result.totalPages);
@@ -112,7 +112,7 @@ const FarmerDetail = () => {
       const [f, allS, p, up] = await Promise.all([
         farmerApi.getById(parseInt(farmerId!)),
         seasonApi.getActive(),
-        paymentApi.getByFarmerPaged(parseInt(farmerId!), 0, PAY_PAGE_SIZE),
+        paymentApi.getByFarmerPaged(parseInt(farmerId!), 0, PAY_PAGE_SIZE, selectedSeason?.id),
         unitPriceApi.getByPump(pumpId),
       ]);
       setFarmer(f);
