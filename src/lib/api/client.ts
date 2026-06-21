@@ -282,6 +282,10 @@ export const seasonApi = {
     apiRequest<Season>(`/seasons/${id}/set-current`, { method: "PUT" }),
   delete: async (id: number): Promise<void> =>
     apiRequest<void>(`/seasons/${id}`, { method: "DELETE" }),
+  getFarmerHistory: async (farmerId: number, page: number, size: number): Promise<PageResponse<Season>> => {
+    const qs = new URLSearchParams({ page: String(page), size: String(size) });
+    return apiRequest<PageResponse<Season>>(`/seasons/farmer/${farmerId}/history?${qs}`);
+  },
 };
 
 // Unit Price API

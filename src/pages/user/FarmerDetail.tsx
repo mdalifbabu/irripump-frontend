@@ -22,8 +22,7 @@ import PaginationBar from "@/components/PaginationBar";
 import { userNavItems } from "@/lib/navItems";
 
 const PAY_PAGE_SIZE = 10;
-
-
+const SEASON_PAGE_SIZE = 5;
 
 interface SeasonSummary {
   season: Season;
@@ -41,6 +40,9 @@ const FarmerDetail = () => {
   const [farmerDetail, setFarmerDetail] = useState<FarmerDetailResponse | null>(null);
   const [allSeasons, setAllSeasons] = useState<Season[]>([]);
   const [seasonSummaries, setSeasonSummaries] = useState<SeasonSummary[]>([]);
+  const [seasonHistoryPage, setSeasonHistoryPage] = useState(0);
+  const [seasonHistoryTotal, setSeasonHistoryTotal] = useState(0);
+  const [seasonHistoryTotalPages, setSeasonHistoryTotalPages] = useState(0);
   const [payments, setPayments] = useState<Payment[]>([]);
   const [payTotalElements, setPayTotalElements] = useState(0);
   const [payCurrentPage, setPayCurrentPage] = useState(0);
@@ -76,6 +78,33 @@ const FarmerDetail = () => {
     } catch { /* non-critical */ }
   };
 
+  const fetchSeasonHistory = async (page: number, up?: UnitPrice[]) => {
+    if (!farmerId || !pumpId) return;
+    const prices = up ?? unitPrices;
+    try {
+      const result = await seasonApi.getFarmerHistory(parseInt(farmerId!), page, SEASON_PAGE_SIZE);
+      setSeasonHistoryPage(result.number);
+      setSeasonHistoryTotal(result.totalElements);
+      setSeasonHistoryTotalPages(result.totalPages);
+
+      const summaries: SeasonSummary[] = [];
+      for (const s of result.content) {
+        try {
+          const asgn = await assignmentApi.getByFarmer(parseInt(farmerId!), pumpId, s.id, s.year);
+          const totalLandShatak = asgn.reduce((acc, a) => acc + (a.assignedSizeShatak ?? a.landSizeShatak ?? 0), 0);
+          const up_match = prices.find(u => u.season === s.seasonName && u.year === s.year)
+            ?? prices.find(u => u.isActive) ?? prices[0];
+          const pricePerShatak = up_match?.pricePerShatak ?? 0;
+          const calculatedCost = totalLandShatak * pricePerShatak;
+          summaries.push({ season: s, assignments: asgn, totalLandShatak, totalPaid: 0, calculatedCost, due: 0, advance: 0 });
+        } catch {
+          summaries.push({ season: s, assignments: [], totalLandShatak: 0, totalPaid: 0, calculatedCost: 0, due: 0, advance: 0 });
+        }
+      }
+      setSeasonSummaries(summaries);
+    } catch { /* non-critical */ }
+  };
+
   const fetchData = async () => {
     if (!pumpId || !farmerId) return;
     setLoading(true);
@@ -103,29 +132,8 @@ const FarmerDetail = () => {
         } catch { /* detail is optional */ }
       }
 
-      // Build summaries for each season (show current + previous)
-      const summaries: SeasonSummary[] = [];
-      for (const s of allS.slice(0, 4)) {
-        try {
-          const asgn = await assignmentApi.getByFarmer(parseInt(farmerId!), pumpId, s.id, s.year);
-          if (asgn.length > 0) {
-            const totalLandShatak = asgn.reduce((acc, a) => {
-              const ls = a.assignedSizeShatak ?? a.landSizeShatak ?? 0;
-              return acc + ls;
-            }, 0);
-            const up_match = up.find(u => u.season === s.seasonName && u.year === s.year)
-              ?? up.find(u => u.isActive) ?? up[0];
-            const pricePerShatak = up_match?.pricePerShatak ?? 0;
-            const calculatedCost = totalLandShatak * pricePerShatak;
-            const totalPaid = 0; // backend-calculated via farmerDetail; season summaries use it for layout only
-            const due = Math.max(0, calculatedCost - totalPaid);
-            const advance = 0;
-            summaries.push({ season: s, assignments: asgn, totalLandShatak, totalPaid, calculatedCost, due, advance });
-          }
-        } catch { /* skip season if error */ }
-      }
-
-      setSeasonSummaries(summaries);
+      // Season history is loaded separately (paginated) — pass up directly to avoid stale closure
+      await fetchSeasonHistory(0, up);
     } catch (e: any) {
       toast({ title: "Error", description: e.message || "Failed to fetch", variant: "destructive" });
     } finally {
@@ -338,21 +346,29 @@ const FarmerDetail = () => {
                     <div className="flex items-center justify-between">
                       <CardTitle className="text-base">{ss.season.seasonNameBengali || ss.season.seasonName} — {ss.season.year}</CardTitle>
                       {ss.season.isCurrent && <Badge>বর্তমান</Badge>}
-                      {ss.due > 0
-                        ? <Badge variant="destructive">বকেয়া ৳{ss.due.toFixed(0)}</Badge>
-                        : <Badge variant="default" className="bg-green-600">পরিশোধিত</Badge>}
                     </div>
                   </CardHeader>
                   <CardContent>
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
-                      <div><p className="text-muted-foreground">জমি</p><p className="font-bold">{ss.assignments.length} পিস</p></div>
-                      <div><p className="text-muted-foreground">মোট জমি</p><p className="font-bold">{ss.totalLandShatak.toFixed(2)} শতক</p><p className="text-xs text-muted-foreground">{(ss.totalLandShatak/33).toFixed(3)} বিঘা</p></div>
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-sm">
+                      <div><p className="text-muted-foreground">জমি</p><p className="font-bold">{ss.assignments.length} পিস · {ss.totalLandShatak.toFixed(2)} শতক</p></div>
                       <div><p className="text-muted-foreground">খরচ</p><p className="font-bold text-blue-600">৳{ss.calculatedCost.toFixed(0)}</p></div>
-                      <div><p className="text-muted-foreground">পরিশোধ</p><p className="font-bold text-green-600">৳{ss.totalPaid.toFixed(0)}</p></div>
+                      <div>
+                        <Button size="sm" variant="outline" className="mt-1"
+                          onClick={() => navigate(`/admin/farmers/${farmerId}/ledger`)}>
+                          লেজার
+                        </Button>
+                      </div>
                     </div>
                   </CardContent>
                 </Card>
               ))}
+              <PaginationBar
+                currentPage={seasonHistoryPage}
+                totalPages={seasonHistoryTotalPages}
+                totalElements={seasonHistoryTotal}
+                pageSize={SEASON_PAGE_SIZE}
+                onPageChange={fetchSeasonHistory}
+              />
             </div>
           </TabsContent>
 
