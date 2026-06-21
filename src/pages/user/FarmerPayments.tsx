@@ -15,6 +15,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
+import { usePumpContext } from "@/contexts/PumpContext";
 import { farmerApi, paymentApi, invoiceApi } from "@/lib/api/client";
 import { buildInvoicePdf } from "@/lib/invoice/buildInvoicePdf";
 import { buildPaymentListPdf } from "@/lib/invoice/buildPaymentListPdf";
@@ -56,6 +57,7 @@ const FarmerPayments = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const { isAuthenticated, isLoading } = useAuth();
+  const { selectedSeason } = usePumpContext();
 
   const form = useForm<FormData>({
     resolver: zodResolver(schema),
@@ -65,7 +67,7 @@ const FarmerPayments = () => {
   useEffect(() => {
     if (!isLoading && !isAuthenticated) { navigate("/auth"); return; }
     if (!isLoading && isAuthenticated && farmerId) fetchData(0);
-  }, [isLoading, isAuthenticated, farmerId, navigate]);
+  }, [isLoading, isAuthenticated, farmerId, navigate, selectedSeason?.id]);
 
   const fetchData = async (page: number, farmerObj?: Farmer) => {
     setLoading(true);
@@ -76,7 +78,7 @@ const FarmerPayments = () => {
         f = await farmerApi.getById(id);
         setFarmer(f);
       }
-      const result = await paymentApi.getByFarmerPaged(id, page, PAGE_SIZE);
+      const result = await paymentApi.getByFarmerPaged(id, page, PAGE_SIZE, selectedSeason?.id);
       setPayments(result.content);
       setCurrentPage(result.number);
       setTotalPages(result.totalPages);
@@ -88,7 +90,7 @@ const FarmerPayments = () => {
   const onSubmit = async (data: FormData) => {
     setSubmitting(true);
     try {
-      await paymentApi.create(parseInt(farmerId!), { ...(data as Required<FormData>), transactionReference: data.transactionReference || undefined });
+      await paymentApi.create(parseInt(farmerId!), { ...(data as Required<FormData>), transactionReference: data.transactionReference || undefined }, selectedSeason?.id);
       toast({ title: "পেমেন্ট রেকর্ড হয়েছে" });
       form.reset(); setShowForm(false); fetchData(0);
     } catch (e: any) { toast({ title: "Error", description: e.message, variant: "destructive" }); }

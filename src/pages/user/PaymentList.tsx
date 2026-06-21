@@ -39,14 +39,14 @@ const PaymentList = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const { user, isAuthenticated, isLoading } = useAuth();
-  const { pumpId, pumps, season, year } = usePumpContext();
+  const { pumpId, pumps, season, year, selectedSeason } = usePumpContext();
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) { navigate("/auth"); return; }
     if (!isLoading && user?.role !== "USER") { navigate("/auth"); return; }
   }, [isLoading, isAuthenticated, user, navigate]);
 
-  useEffect(() => { if (pumpId) fetchPayments(0); }, [pumpId]);
+  useEffect(() => { if (pumpId) fetchPayments(0); }, [pumpId, selectedSeason?.id]);
 
   const fetchPayments = async (
     page: number,
@@ -62,6 +62,7 @@ const PaymentList = () => {
         farmerName: fn || undefined,
         paymentDate: pd || undefined,
         reference: ref || undefined,
+        seasonId: selectedSeason?.id,
       });
       setPayments(result.content);
       setCurrentPage(result.number);

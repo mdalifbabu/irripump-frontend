@@ -309,14 +309,17 @@ export const adminUnitPriceApi = {
 
 // Payment API
 export const paymentApi = {
-  create: async (farmerId: number, data: CreatePaymentRequest): Promise<Payment> =>
-    apiRequest<Payment>(`/payments/farmer/${farmerId}`, { method: "POST", body: JSON.stringify(data) }),
+  create: async (farmerId: number, data: CreatePaymentRequest, seasonId?: number): Promise<Payment> => {
+    const qs = seasonId ? `?seasonId=${seasonId}` : "";
+    return apiRequest<Payment>(`/payments/farmer/${farmerId}${qs}`, { method: "POST", body: JSON.stringify(data) });
+  },
   update: async (id: number, data: UpdatePaymentRequest): Promise<Payment> =>
     apiRequest<Payment>(`/payments/${id}/update`, { method: "PUT", body: JSON.stringify(data) }),
   getByFarmer: async (farmerId: number): Promise<Payment[]> =>
     apiRequest<Payment[]>(`/payments/farmer/${farmerId}`),
-  getByFarmerPaged: async (farmerId: number, page: number, size: number): Promise<PageResponse<Payment>> => {
+  getByFarmerPaged: async (farmerId: number, page: number, size: number, seasonId?: number): Promise<PageResponse<Payment>> => {
     const qs = new URLSearchParams({ page: String(page), size: String(size) });
+    if (seasonId) qs.append("seasonId", String(seasonId));
     return apiRequest<PageResponse<Payment>>(`/payments/farmer/${farmerId}/paged?${qs}`);
   },
   delete: async (id: number): Promise<void> =>
@@ -327,12 +330,13 @@ export const paymentApi = {
     apiRequest<Payment[]>(`/payments/pump/${pumpId}`),
   getByPumpPaged: async (
     pumpId: number, page: number, size: number,
-    filters?: { farmerName?: string; paymentDate?: string; reference?: string }
+    filters?: { farmerName?: string; paymentDate?: string; reference?: string; seasonId?: number }
   ): Promise<PageResponse<PaymentResponse>> => {
     const qs = new URLSearchParams({ pumpId: String(pumpId), page: String(page), size: String(size) });
     if (filters?.farmerName) qs.append("farmerName", filters.farmerName);
     if (filters?.paymentDate) qs.append("paymentDate", filters.paymentDate);
     if (filters?.reference) qs.append("reference", filters.reference);
+    if (filters?.seasonId) qs.append("seasonId", String(filters.seasonId));
     return apiRequest<PageResponse<PaymentResponse>>(`/payments/pump/${pumpId}/paged?${qs}`);
   },
 };
