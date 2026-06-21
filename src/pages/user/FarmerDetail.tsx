@@ -90,12 +90,18 @@ const FarmerDetail = () => {
       const summaries: SeasonSummary[] = [];
       for (const s of result.content) {
         try {
-          const asgn = await assignmentApi.getByFarmer(parseInt(farmerId!), pumpId, s.id, s.year);
+          const [asgn, detail] = await Promise.all([
+            assignmentApi.getByFarmer(parseInt(farmerId!), pumpId, s.id, s.year),
+            farmerApi.getDetail(parseInt(farmerId!), s.id, s.year).catch(() => null),
+          ]);
           const totalLandShatak = asgn.reduce((acc, a) => acc + (a.assignedSizeShatak ?? a.landSizeShatak ?? 0), 0);
           const up_match = prices.find(u => u.season === s.seasonName && u.year === s.year);
           const pricePerShatak = up_match?.pricePerShatak ?? 0;
-          const calculatedCost = totalLandShatak * pricePerShatak;
-          summaries.push({ season: s, assignments: asgn, totalLandShatak, totalPaid: 0, calculatedCost, due: 0, advance: 0 });
+          const calculatedCost = detail?.calculatedCost ?? totalLandShatak * pricePerShatak;
+          const totalPaid = detail?.totalPaid ?? 0;
+          const due = detail?.dueAmount ?? 0;
+          const advance = detail?.advanceAmount ?? 0;
+          summaries.push({ season: s, assignments: asgn, totalLandShatak, totalPaid, calculatedCost, due, advance });
         } catch {
           summaries.push({ season: s, assignments: [], totalLandShatak: 0, totalPaid: 0, calculatedCost: 0, due: 0, advance: 0 });
         }
@@ -122,11 +128,10 @@ const FarmerDetail = () => {
       setPayTotalElements(p.totalElements);
       setUnitPrices(up);
 
-      // Fetch backend-calculated cost/due for the current season
-      const currentSeasonObj = allS.find(s => s.seasonName.toUpperCase() === season.toUpperCase() && s.year === year);
-      if (currentSeasonObj) {
+      // Fetch backend-calculated cost/due/advance for the selected season
+      if (selectedSeason?.id) {
         try {
-          const detail = await farmerApi.getDetail(parseInt(farmerId!), currentSeasonObj.id, year);
+          const detail = await farmerApi.getDetail(parseInt(farmerId!), selectedSeason.id, selectedSeason.year);
           setFarmerDetail(detail);
         } catch { /* detail is optional */ }
       }
@@ -348,15 +353,22 @@ const FarmerDetail = () => {
                     </div>
                   </CardHeader>
                   <CardContent>
-                    <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-sm">
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
                       <div><p className="text-muted-foreground">জমি</p><p className="font-bold">{ss.assignments.length} পিস · {ss.totalLandShatak.toFixed(2)} শতক</p></div>
                       <div><p className="text-muted-foreground">খরচ</p><p className="font-bold text-blue-600">৳{ss.calculatedCost.toFixed(0)}</p></div>
+                      <div><p className="text-muted-foreground">পরিশোধ</p><p className="font-bold text-green-600">৳{ss.totalPaid.toFixed(0)}</p></div>
                       <div>
-                        <Button size="sm" variant="outline" className="mt-1"
-                          onClick={() => navigate(`/admin/farmers/${farmerId}/ledger`)}>
-                          লেজার
-                        </Button>
+                        <p className="text-muted-foreground">{ss.due > 0 ? "বকেয়া" : ss.advance > 0 ? "অগ্রিম" : "বকেয়া"}</p>
+                        <p className={`font-bold ${ss.due > 0 ? "text-red-600" : ss.advance > 0 ? "text-green-600" : "text-muted-foreground"}`}>
+                          {ss.due > 0 ? `৳${ss.due.toFixed(0)}` : ss.advance > 0 ? `৳${ss.advance.toFixed(0)}` : "—"}
+                        </p>
                       </div>
+                    </div>
+                    <div className="mt-2 flex justify-end">
+                      <Button size="sm" variant="outline"
+                        onClick={() => navigate(`/admin/farmers/${farmerId}/ledger`)}>
+                        লেজার
+                      </Button>
                     </div>
                   </CardContent>
                 </Card>
