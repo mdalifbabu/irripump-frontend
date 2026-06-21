@@ -14,6 +14,9 @@ export interface PaymentListPdfOptions {
   seasonName?: string;
   year?: number;
   payments: Payment[];
+  totalPaid?: number;
+  dueAmount?: number;
+  advanceAmount?: number;
 }
 
 export function buildPaymentListPdf(opts: PaymentListPdfOptions): { save: (filename: string) => void } {
@@ -41,6 +44,18 @@ export function buildPaymentListPdf(opts: PaymentListPdfOptions): { save: (filen
   const farmerColHeader = isFarmerSpecific ? "" : "<th>কৃষক ID</th>";
   const farmerColFooter = isFarmerSpecific ? "" : "<td></td>";
 
+  // Summary rows: due or advance
+  const due = opts.dueAmount ?? 0;
+  const advance = opts.advanceAmount ?? 0;
+  const paidSummary = opts.totalPaid != null
+    ? `<tr><td colspan="4" style="text-align:right;padding-right:6px;">মৌসুমে মোট পরিশোধ</td><td style="font-weight:bold;color:#166534;">${fmt(opts.totalPaid)}</td></tr>`
+    : "";
+  const balanceRow = due > 0
+    ? `<tr><td colspan="4" style="text-align:right;padding-right:6px;">বকেয়া</td><td style="font-weight:bold;color:#991b1b;">${fmt(due)}</td></tr>`
+    : advance > 0
+    ? `<tr><td colspan="4" style="text-align:right;padding-right:6px;">অগ্রিম জমা</td><td style="font-weight:bold;color:#166534;">${fmt(advance)}</td></tr>`
+    : `<tr><td colspan="4" style="text-align:right;padding-right:6px;">বকেয়া</td><td style="font-weight:bold;color:#6b7280;">—</td></tr>`;
+
   const html = `<!DOCTYPE html>
 <html>
 <head>
@@ -57,6 +72,9 @@ export function buildPaymentListPdf(opts: PaymentListPdfOptions): { save: (filen
   th { background: #28508c; color: #fff; padding: 2px 4px; text-align: left; }
   td { padding: 2px 4px; border-bottom: 1px solid #eee; }
   tfoot td { font-weight: bold; background: #f5f5f5; }
+  .summary { margin-top: 8px; border-top: 2px solid #28508c; padding-top: 4px; }
+  .summary table { font-size: 7pt; }
+  .summary tr:last-child td { border-bottom: none; }
 </style>
 </head>
 <body>
@@ -65,13 +83,22 @@ export function buildPaymentListPdf(opts: PaymentListPdfOptions): { save: (filen
 <div class="title">PAYMENT STATEMENT</div>
 <div class="meta">
   ${farmerHeader}
-  <div>${opts.pumpName}${opts.seasonName ? ` | ${opts.seasonName} ${opts.year ?? ""}` : ""}</div>
+  <div>${opts.pumpName}${opts.seasonName ? ` | মৌসুম: ${opts.seasonName} ${opts.year ?? ""}` : ""}</div>
 </div>
 <table>
   <thead><tr>${farmerColHeader}<th>তারিখ</th><th>পরিমাণ</th><th>ধরন</th><th>পদ্ধতি</th></tr></thead>
   <tbody>${rows}</tbody>
-  <tfoot><tr>${farmerColFooter}<td>মোট</td><td>${fmt(total)}</td><td></td><td></td></tr></tfoot>
+  <tfoot><tr>${farmerColFooter}<td>তালিকায় মোট</td><td>${fmt(total)}</td><td></td><td></td></tr></tfoot>
 </table>
+${isFarmerSpecific && opts.seasonName ? `
+<div class="summary">
+  <table>
+    <tbody>
+      ${paidSummary}
+      ${balanceRow}
+    </tbody>
+  </table>
+</div>` : ""}
 </body>
 </html>`;
 

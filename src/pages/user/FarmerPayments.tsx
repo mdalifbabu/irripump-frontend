@@ -17,6 +17,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { usePumpContext } from "@/contexts/PumpContext";
 import { farmerApi, paymentApi, invoiceApi } from "@/lib/api/client";
+import type { FarmerDetailResponse } from "@/lib/api/types";
 import { buildInvoicePdf } from "@/lib/invoice/buildInvoicePdf";
 import { buildPaymentListPdf } from "@/lib/invoice/buildPaymentListPdf";
 import type { Farmer, Payment } from "@/lib/api/types";
@@ -42,6 +43,7 @@ type FormData = z.infer<typeof schema>;
 const FarmerPayments = () => {
   const { farmerId } = useParams<{ farmerId: string }>();
   const [farmer, setFarmer] = useState<Farmer | null>(null);
+  const [farmerDetail, setFarmerDetail] = useState<FarmerDetailResponse | null>(null);
   const [payments, setPayments] = useState<Payment[]>([]);
   const [loading, setLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(0);
@@ -78,11 +80,17 @@ const FarmerPayments = () => {
         f = await farmerApi.getById(id);
         setFarmer(f);
       }
-      const result = await paymentApi.getByFarmerPaged(id, page, PAGE_SIZE, selectedSeason?.id);
+      const [result, detail] = await Promise.all([
+        paymentApi.getByFarmerPaged(id, page, PAGE_SIZE, selectedSeason?.id),
+        selectedSeason?.id
+          ? farmerApi.getDetail(id, selectedSeason.id, selectedSeason.year).catch(() => null)
+          : Promise.resolve(null),
+      ]);
       setPayments(result.content);
       setCurrentPage(result.number);
       setTotalPages(result.totalPages);
       setTotalElements(result.totalElements);
+      setFarmerDetail(detail);
     } catch { toast({ title: "Error", variant: "destructive" }); }
     finally { setLoading(false); }
   };
@@ -137,8 +145,13 @@ const FarmerPayments = () => {
         farmerName: farmer.nameBengali,
         farmerCode: farmer.farmerCode,
         pumpName: farmer.pumpName ?? "",
+        seasonName: selectedSeason?.seasonName,
+        year: selectedSeason?.year,
         payments,
-      }).save(`payments_${farmer.farmerCode}.pdf`);
+        totalPaid: farmerDetail?.totalPaid,
+        dueAmount: farmerDetail?.dueAmount,
+        advanceAmount: farmerDetail?.advanceAmount,
+      }).save(`payments_${farmer.farmerCode}${selectedSeason ? `_${selectedSeason.seasonName}_${selectedSeason.year}` : ""}.pdf`);
     } finally {
       setDownloadingList(false);
     }
