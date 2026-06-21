@@ -92,8 +92,7 @@ const FarmerDetail = () => {
         try {
           const asgn = await assignmentApi.getByFarmer(parseInt(farmerId!), pumpId, s.id, s.year);
           const totalLandShatak = asgn.reduce((acc, a) => acc + (a.assignedSizeShatak ?? a.landSizeShatak ?? 0), 0);
-          const up_match = prices.find(u => u.season === s.seasonName && u.year === s.year)
-            ?? prices.find(u => u.isActive) ?? prices[0];
+          const up_match = prices.find(u => u.season === s.seasonName && u.year === s.year);
           const pricePerShatak = up_match?.pricePerShatak ?? 0;
           const calculatedCost = totalLandShatak * pricePerShatak;
           summaries.push({ season: s, assignments: asgn, totalLandShatak, totalPaid: 0, calculatedCost, due: 0, advance: 0 });
