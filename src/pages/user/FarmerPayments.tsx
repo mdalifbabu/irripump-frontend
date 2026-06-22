@@ -59,7 +59,7 @@ const FarmerPayments = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const { isAuthenticated, isLoading } = useAuth();
-  const { selectedSeason } = usePumpContext();
+  const { selectedSeason, year } = usePumpContext();
 
   const form = useForm<FormData>({
     resolver: zodResolver(schema),
@@ -81,7 +81,7 @@ const FarmerPayments = () => {
         setFarmer(f);
       }
       const [result, detail] = await Promise.all([
-        paymentApi.getByFarmerPaged(id, page, PAGE_SIZE, selectedSeason?.id),
+        paymentApi.getByFarmerPaged(id, page, PAGE_SIZE, selectedSeason?.id, selectedSeason?.id ? undefined : year),
         selectedSeason?.id
           ? farmerApi.getDetail(id, selectedSeason.id, selectedSeason.year).catch(() => null)
           : Promise.resolve(null),
@@ -143,7 +143,7 @@ const FarmerPayments = () => {
     try {
       const id = parseInt(farmerId!);
       // Fetch all payments for the selected season (not just the current page)
-      const all = await paymentApi.getByFarmerPaged(id, 0, 1000, selectedSeason?.id);
+      const all = await paymentApi.getByFarmerPaged(id, 0, 1000, selectedSeason?.id, selectedSeason?.id ? undefined : year);
       buildPaymentListPdf({
         farmerName: farmer.nameBengali,
         farmerCode: farmer.farmerCode,

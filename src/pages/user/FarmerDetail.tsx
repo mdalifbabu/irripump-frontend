@@ -70,7 +70,7 @@ const FarmerDetail = () => {
   const fetchPayments = async (page: number) => {
     if (!farmerId) return;
     try {
-      const result = await paymentApi.getByFarmerPaged(parseInt(farmerId!), page, PAY_PAGE_SIZE, selectedSeason?.id);
+      const result = await paymentApi.getByFarmerPaged(parseInt(farmerId!), page, PAY_PAGE_SIZE, selectedSeason?.id, selectedSeason?.id ? undefined : year);
       setPayments(result.content);
       setPayCurrentPage(result.number);
       setPayTotalPages(result.totalPages);
@@ -117,7 +117,7 @@ const FarmerDetail = () => {
       const [f, allS, p, up] = await Promise.all([
         farmerApi.getById(parseInt(farmerId!)),
         seasonApi.getActive(),
-        paymentApi.getByFarmerPaged(parseInt(farmerId!), 0, PAY_PAGE_SIZE, selectedSeason?.id),
+        paymentApi.getByFarmerPaged(parseInt(farmerId!), 0, PAY_PAGE_SIZE, selectedSeason?.id, selectedSeason?.id ? undefined : year),
         unitPriceApi.getByPump(pumpId),
       ]);
       setFarmer(f);

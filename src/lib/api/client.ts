@@ -323,9 +323,10 @@ export const paymentApi = {
     apiRequest<Payment>(`/payments/${id}/update`, { method: "PUT", body: JSON.stringify(data) }),
   getByFarmer: async (farmerId: number): Promise<Payment[]> =>
     apiRequest<Payment[]>(`/payments/farmer/${farmerId}`),
-  getByFarmerPaged: async (farmerId: number, page: number, size: number, seasonId?: number): Promise<PageResponse<Payment>> => {
+  getByFarmerPaged: async (farmerId: number, page: number, size: number, seasonId?: number, year?: number): Promise<PageResponse<Payment>> => {
     const qs = new URLSearchParams({ page: String(page), size: String(size) });
     if (seasonId) qs.append("seasonId", String(seasonId));
+    else if (year) qs.append("year", String(year));
     return apiRequest<PageResponse<Payment>>(`/payments/farmer/${farmerId}/paged?${qs}`);
   },
   delete: async (id: number): Promise<void> =>
