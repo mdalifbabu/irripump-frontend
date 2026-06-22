@@ -137,22 +137,27 @@ const FarmerPayments = () => {
     finally { setDownloadingId(null); }
   };
 
-  const handleDownloadPaymentList = () => {
+  const handleDownloadPaymentList = async () => {
     if (!farmer) return;
     setDownloadingList(true);
     try {
+      const id = parseInt(farmerId!);
+      // Fetch all payments for the selected season (not just the current page)
+      const all = await paymentApi.getByFarmerPaged(id, 0, 1000, selectedSeason?.id);
       buildPaymentListPdf({
         farmerName: farmer.nameBengali,
         farmerCode: farmer.farmerCode,
         pumpName: farmer.pumpName ?? "",
         seasonName: selectedSeason?.seasonName,
         year: selectedSeason?.year,
-        payments,
+        payments: all.content,
         calculatedCost: farmerDetail?.calculatedCost,
         totalLandShatak: farmerDetail?.totalLandSizeShatak ?? undefined,
         dueAmount: farmerDetail?.dueAmount,
         advanceAmount: farmerDetail?.advanceAmount,
       }).save(`payments_${farmer.farmerCode}${selectedSeason ? `_${selectedSeason.seasonName}_${selectedSeason.year}` : ""}.pdf`);
+    } catch (e: any) {
+      toast({ title: "Error", description: e.message, variant: "destructive" });
     } finally {
       setDownloadingList(false);
     }
