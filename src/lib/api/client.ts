@@ -134,6 +134,8 @@ export const userApi = {
     apiRequest<{ token: string }>(`/admin/users/${userId}/impersonate`, { method: "POST" }),
   setStatus: async (userId: number, isActive: boolean): Promise<User> =>
     apiRequest<User>(`/admin/users/${userId}/status`, { method: "PATCH", body: JSON.stringify({ isActive }) }),
+  reactivate: async (userId: number): Promise<User> =>
+    apiRequest<User>(`/admin/users/${userId}/reactivate`, { method: "PUT" }),
 };
 
 // Admin stats

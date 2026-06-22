@@ -15,6 +15,7 @@ export interface User {
   mobile: string;
   pumpIds?: number[];
   isActive?: boolean;
+  activeUntil?: string;
   createdAt?: string;
   updatedAt?: string;
   lastLogin?: string;
