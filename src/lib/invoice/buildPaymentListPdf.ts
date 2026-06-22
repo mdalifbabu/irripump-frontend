@@ -14,7 +14,9 @@ export interface PaymentListPdfOptions {
   seasonName?: string;
   year?: number;
   payments: Payment[];
-  totalPaid?: number;
+  // Season calculation (from farmerDetail)
+  calculatedCost?: number;
+  totalLandShatak?: number;
   dueAmount?: number;
   advanceAmount?: number;
 }
@@ -22,9 +24,8 @@ export interface PaymentListPdfOptions {
 export function buildPaymentListPdf(opts: PaymentListPdfOptions): { save: (filename: string) => void } {
   const METHODS: Record<string, string> = { CASH: "নগদ", BANK: "ব্যাংক", MOBILE_BANKING: "মোবাইল" };
   const TYPE: Record<string, string> = { PAYMENT: "পেমেন্ট", ADJUSTMENT: "সমন্বয়", DEDUCTION: "কর্তন" };
-  const activePayments = opts.payments.filter((p) => !p.isReversed && p.paymentType === "PAYMENT");
-  const total = activePayments.reduce((s, p) => s + p.amount, 0);
   const isFarmerSpecific = !!(opts.farmerName && opts.farmerCode);
+  const hasSeasonCalc = isFarmerSpecific && opts.seasonName && opts.calculatedCost != null;
 
   const rows = opts.payments.map((p) => {
     const farmerCol = isFarmerSpecific ? "" : `<td>${p.farmerId ?? "-"}</td>`;
@@ -38,23 +39,37 @@ export function buildPaymentListPdf(opts: PaymentListPdfOptions): { save: (filen
   }).join("");
 
   const farmerHeader = isFarmerSpecific
-    ? `<div>${opts.farmerName} (${opts.farmerCode})</div>`
+    ? `<div style="font-weight:bold">${opts.farmerName} (${opts.farmerCode})</div>`
     : `<div>সকল কৃষকের পেমেন্ট</div>`;
 
   const farmerColHeader = isFarmerSpecific ? "" : "<th>কৃষক ID</th>";
-  const farmerColFooter = isFarmerSpecific ? "" : "<td></td>";
 
-  // Summary rows: due or advance
+  // Season calculation box — shown only for farmer-specific, season-filtered PDFs
   const due = opts.dueAmount ?? 0;
   const advance = opts.advanceAmount ?? 0;
-  const paidSummary = opts.totalPaid != null
-    ? `<tr><td colspan="4" style="text-align:right;padding-right:6px;">মৌসুমে মোট পরিশোধ</td><td style="font-weight:bold;color:#166534;">${fmt(opts.totalPaid)}</td></tr>`
-    : "";
-  const balanceRow = due > 0
-    ? `<tr><td colspan="4" style="text-align:right;padding-right:6px;">বকেয়া</td><td style="font-weight:bold;color:#991b1b;">${fmt(due)}</td></tr>`
-    : advance > 0
-    ? `<tr><td colspan="4" style="text-align:right;padding-right:6px;">অগ্রিম জমা</td><td style="font-weight:bold;color:#166534;">${fmt(advance)}</td></tr>`
-    : `<tr><td colspan="4" style="text-align:right;padding-right:6px;">বকেয়া</td><td style="font-weight:bold;color:#6b7280;">—</td></tr>`;
+  const dueColor = due > 0 ? "#991b1b" : "#166534";
+  const dueLabel = due > 0 ? "মোট বকেয়া" : "অগ্রিম জমা";
+  const dueValue = due > 0 ? fmt(due) : advance > 0 ? fmt(advance) : "—";
+
+  const seasonCalcBox = hasSeasonCalc ? `
+<div class="calc-box">
+  <div class="calc-row">
+    <span>মৌসুম</span>
+    <span>${opts.seasonName} ${opts.year ?? ""}</span>
+  </div>
+  ${opts.totalLandShatak != null ? `<div class="calc-row">
+    <span>মোট জমি</span>
+    <span>${opts.totalLandShatak.toFixed(2)} শতক (${(opts.totalLandShatak / 33).toFixed(3)} বিঘা)</span>
+  </div>` : ""}
+  <div class="calc-row">
+    <span>মৌসুম বিল</span>
+    <span>${fmt(opts.calculatedCost!)}</span>
+  </div>
+  <div class="calc-row due-row" style="color:${dueColor}">
+    <span>${dueLabel}</span>
+    <span style="font-size:10pt;font-weight:bold">${dueValue}</span>
+  </div>
+</div>` : "";
 
   const html = `<!DOCTYPE html>
 <html>
@@ -64,17 +79,20 @@ export function buildPaymentListPdf(opts: PaymentListPdfOptions): { save: (filen
   * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Noto Sans Bengali', Arial, sans-serif; }
   body { width: 100%; padding: 5mm; font-size: 8pt; }
   h1 { font-size: 8pt; text-align: center; }
-  h2 { font-size: 7pt; text-align: center; color: #555; margin-bottom: 6px; }
-  .title { font-size: 9pt; font-weight: bold; text-align: center; margin: 4px 0; }
-  .meta { font-size: 7pt; margin-bottom: 8px; page-break-inside: avoid; }
-  table { width: 100%; border-collapse: collapse; font-size: 6pt; page-break-inside: avoid; }
+  h2 { font-size: 7pt; text-align: center; color: #555; margin-bottom: 4px; }
+  .title { font-size: 9pt; font-weight: bold; text-align: center; margin: 4px 0 6px; }
+  .meta { font-size: 7pt; margin-bottom: 6px; }
+  table { width: 100%; border-collapse: collapse; font-size: 6pt; }
   tr { page-break-inside: avoid; }
   th { background: #28508c; color: #fff; padding: 2px 4px; text-align: left; }
   td { padding: 2px 4px; border-bottom: 1px solid #eee; }
-  tfoot td { font-weight: bold; background: #f5f5f5; }
-  .summary { margin-top: 8px; border-top: 2px solid #28508c; padding-top: 4px; }
-  .summary table { font-size: 7pt; }
-  .summary tr:last-child td { border-bottom: none; }
+  .calc-box {
+    border: 1.5px solid #28508c; border-radius: 4px;
+    padding: 5px 8px; margin-bottom: 8px; font-size: 7pt;
+  }
+  .calc-row { display: flex; justify-content: space-between; padding: 1.5px 0; }
+  .due-row { border-top: 1px solid #ccc; margin-top: 3px; padding-top: 4px; font-weight: bold; }
+  .section-title { font-size: 7pt; font-weight: bold; color: #555; margin-bottom: 3px; }
 </style>
 </head>
 <body>
@@ -83,22 +101,14 @@ export function buildPaymentListPdf(opts: PaymentListPdfOptions): { save: (filen
 <div class="title">PAYMENT STATEMENT</div>
 <div class="meta">
   ${farmerHeader}
-  <div>${opts.pumpName}${opts.seasonName ? ` | মৌসুম: ${opts.seasonName} ${opts.year ?? ""}` : ""}</div>
+  <div>${opts.pumpName}</div>
 </div>
+${seasonCalcBox}
+<div class="section-title">পেমেন্ট বিবরণ${opts.seasonName ? ` — ${opts.seasonName} ${opts.year ?? ""}` : ""}</div>
 <table>
   <thead><tr>${farmerColHeader}<th>তারিখ</th><th>পরিমাণ</th><th>ধরন</th><th>পদ্ধতি</th></tr></thead>
-  <tbody>${rows}</tbody>
-  <tfoot><tr>${farmerColFooter}<td>তালিকায় মোট</td><td>${fmt(total)}</td><td></td><td></td></tr></tfoot>
+  <tbody>${rows.length ? rows : '<tr><td colspan="5" style="text-align:center;color:#999;padding:6px">কোনো পেমেন্ট নেই</td></tr>'}</tbody>
 </table>
-${isFarmerSpecific && opts.seasonName ? `
-<div class="summary">
-  <table>
-    <tbody>
-      ${paidSummary}
-      ${balanceRow}
-    </tbody>
-  </table>
-</div>` : ""}
 </body>
 </html>`;
 

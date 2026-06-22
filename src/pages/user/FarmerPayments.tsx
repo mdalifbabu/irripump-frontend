@@ -148,7 +148,8 @@ const FarmerPayments = () => {
         seasonName: selectedSeason?.seasonName,
         year: selectedSeason?.year,
         payments,
-        totalPaid: farmerDetail?.totalPaid,
+        calculatedCost: farmerDetail?.calculatedCost,
+        totalLandShatak: farmerDetail?.totalLandSizeShatak ?? undefined,
         dueAmount: farmerDetail?.dueAmount,
         advanceAmount: farmerDetail?.advanceAmount,
       }).save(`payments_${farmer.farmerCode}${selectedSeason ? `_${selectedSeason.seasonName}_${selectedSeason.year}` : ""}.pdf`);
