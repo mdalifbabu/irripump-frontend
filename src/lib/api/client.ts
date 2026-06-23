@@ -62,13 +62,28 @@ async function apiRequest<T>(endpoint: string, options: RequestInit = {}): Promi
           if (!retry.ok) throw new Error(`API Error: ${retry.status}`);
           return retry.json();
         }
+        const errData = await refreshResponse.json().catch(() => ({})) as { errorCode?: string };
+        if (errData.errorCode === "ACCOUNT_DEACTIVATED") {
+          localStorage.setItem("irripump_flash", JSON.stringify({ type: "deactivated" }));
+        }
       } catch {
-        tokenManager.clear();
-        window.location.href = "/auth";
+        // network error or retry failed — fall through to clear + redirect
       }
     }
     tokenManager.clear();
     window.location.href = "/auth";
+    return {} as T;
+  }
+
+  if (response.status === 403) {
+    const errData = await response.json().catch(() => ({})) as { errorCode?: string; message?: string };
+    if (errData.errorCode === "ACCOUNT_DEACTIVATED") {
+      tokenManager.clear();
+      localStorage.setItem("irripump_flash", JSON.stringify({ type: "deactivated" }));
+      window.location.href = "/auth";
+      return {} as T;
+    }
+    throw new Error(errData.message || "Access denied");
   }
 
   if (!response.ok) {
@@ -212,6 +227,10 @@ export const landApi = {
     return apiRequest<PageResponse<Land>>(`/lands/paged?${qs}`);
   },
   getById: async (id: number): Promise<Land> => apiRequest<Land>(`/lands/${id}`),
+  getAssignedPaged: async (pumpId: number, seasonId: number, year: number, page: number, size: number): Promise<PageResponse<Land>> =>
+    apiRequest<PageResponse<Land>>(`/lands/assigned/paged?pumpId=${pumpId}&seasonId=${seasonId}&year=${year}&page=${page}&size=${size}`),
+  getUnassignedPaged: async (pumpId: number, seasonId: number, year: number, page: number, size: number): Promise<PageResponse<Land>> =>
+    apiRequest<PageResponse<Land>>(`/lands/unassigned/paged?pumpId=${pumpId}&seasonId=${seasonId}&year=${year}&page=${page}&size=${size}`),
   update: async (id: number, data: UpdateLandRequest): Promise<Land> =>
     apiRequest<Land>(`/lands/${id}`, { method: "PUT", body: JSON.stringify(data) }),
   delete: async (id: number): Promise<void> =>

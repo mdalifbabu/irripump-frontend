@@ -13,7 +13,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { userApi } from "@/lib/api/client";
 import type { User } from "@/lib/api/types";
-import { Plus, UserPlus, Pencil, Trash2, Loader2, RefreshCw, RotateCcw } from "lucide-react";
+import { Plus, UserPlus, Pencil, Trash2, Loader2, RefreshCw, RotateCcw, KeyRound } from "lucide-react";
 import AppNavbar from "@/components/AppNavbar";
 import PumpSelector from "@/components/PumpSelector";
 
@@ -33,6 +33,8 @@ const UserList = () => {
   const [loading, setLoading] = useState(false);
   const [editing, setEditing] = useState<User | null>(null);
   const [deleting, setDeleting] = useState<User | null>(null);
+  const [resettingPwd, setResettingPwd] = useState<User | null>(null);
+  const [newPwd, setNewPwd] = useState("");
   const [busy, setBusy] = useState(false);
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -86,6 +88,18 @@ const UserList = () => {
     try {
       await userApi.setStatus(u.id, !(u.isActive ?? true));
       await fetchUsers();
+    } catch (e: any) { toast({ title: "Error", description: e.message, variant: "destructive" }); }
+    finally { setBusy(false); }
+  };
+
+  const handleResetPassword = async () => {
+    if (!resettingPwd || !newPwd.trim()) return;
+    setBusy(true);
+    try {
+      await userApi.resetPassword(resettingPwd.id, newPwd.trim());
+      toast({ title: "পাসওয়ার্ড রিসেট সফল" });
+      setResettingPwd(null);
+      setNewPwd("");
     } catch (e: any) { toast({ title: "Error", description: e.message, variant: "destructive" }); }
     finally { setBusy(false); }
   };
@@ -181,8 +195,9 @@ const UserList = () => {
                                   <RotateCcw className="w-3.5 h-3.5 mr-1" />পুনরায় সক্রিয়
                                 </Button>
                               )}
-                              <Button size="icon" variant="outline" className="h-8 w-8" onClick={() => setEditing({ ...u })}><Pencil className="w-3.5 h-3.5" /></Button>
-                              <Button size="icon" variant="outline" className="h-8 w-8 text-destructive" onClick={() => setDeleting(u)}><Trash2 className="w-3.5 h-3.5" /></Button>
+                              <Button size="icon" variant="outline" className="h-8 w-8" onClick={() => setEditing({ ...u })} title="Edit"><Pencil className="w-3.5 h-3.5" /></Button>
+                              <Button size="icon" variant="outline" className="h-8 w-8 text-blue-600" onClick={() => { setResettingPwd(u); setNewPwd(""); }} title="Reset Password"><KeyRound className="w-3.5 h-3.5" /></Button>
+                              <Button size="icon" variant="outline" className="h-8 w-8 text-destructive" onClick={() => setDeleting(u)} title="Delete"><Trash2 className="w-3.5 h-3.5" /></Button>
                             </div>
                           </TableCell>
                         </TableRow>
@@ -226,6 +241,27 @@ const UserList = () => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <Dialog open={!!resettingPwd} onOpenChange={(o) => !o && setResettingPwd(null)}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>পাসওয়ার্ড রিসেট — {resettingPwd?.fullName}</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            <Label>নতুন পাসওয়ার্ড</Label>
+            <Input
+              type="password"
+              value={newPwd}
+              onChange={(e) => setNewPwd(e.target.value)}
+              placeholder="নতুন পাসওয়ার্ড দিন"
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setResettingPwd(null)}>বাতিল</Button>
+            <Button onClick={handleResetPassword} disabled={busy || !newPwd.trim()}>
+              {busy && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}রিসেট করুন
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

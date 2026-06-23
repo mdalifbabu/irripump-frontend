@@ -24,6 +24,23 @@ const Auth = () => {
     }
   }, [isLoading, isAuthenticated, user, navigate]);
 
+  // Show flash message from forced logout (e.g. account deactivated mid-session)
+  useEffect(() => {
+    const flash = localStorage.getItem("irripump_flash");
+    if (!flash) return;
+    localStorage.removeItem("irripump_flash");
+    try {
+      const msg = JSON.parse(flash);
+      if (msg.type === "deactivated") {
+        toast({
+          title: "অ্যাকাউন্ট নিষ্ক্রিয়",
+          description: "আপনার অ্যাকাউন্ট নিষ্ক্রিয় করা হয়েছে। পুনরায় সক্রিয় করতে অ্যাডমিনের সাথে যোগাযোগ করুন।",
+          variant: "destructive",
+        });
+      }
+    } catch {}
+  }, []);
+
   const handleAdminLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!adminCredentials.username || !adminCredentials.password) {
