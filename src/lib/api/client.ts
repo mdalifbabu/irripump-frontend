@@ -198,6 +198,8 @@ export const farmerApi = {
     apiRequest<Farmer[]>(`/farmers/pump/${pumpId}`),
   search: async (pumpId: number, query: string): Promise<Farmer[]> =>
     apiRequest<Farmer[]>(`/farmers/pump/${pumpId}/search?query=${encodeURIComponent(query)}`),
+  searchPaged: async (pumpId: number, q: string, page: number, size: number): Promise<PageResponse<Farmer>> =>
+    apiRequest<PageResponse<Farmer>>(`/farmers/pump/${pumpId}/search/paged?q=${encodeURIComponent(q)}&page=${page}&size=${size}`),
   getSummary: async (pumpId: number, seasonId: number, year: number): Promise<FarmerSummaryResponse[]> =>
     apiRequest<FarmerSummaryResponse[]>(`/farmers/pump/${pumpId}/summary?seasonId=${seasonId}&year=${year}`),
   getById: async (id: number): Promise<Farmer> => apiRequest<Farmer>(`/farmers/${id}`),

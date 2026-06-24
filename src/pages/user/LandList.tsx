@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -13,11 +13,12 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { usePumpContext } from "@/contexts/PumpContext";
 import { landApi, assignmentApi, farmerApi } from "@/lib/api/client";
+
+const PICKER_SIZE = 15;
 import type { Land, FarmerLandAssignment, Farmer } from "@/lib/api/types";
 import { Plus, Loader2, Pencil, Trash2, MapPin, Users, Link, Unlink, Search, X } from "lucide-react";
 import AppNavbar from "@/components/AppNavbar";
@@ -60,7 +61,6 @@ const LandList = () => {
 
   // shared
   const [assignments, setAssignments] = useState<FarmerLandAssignment[]>([]);
-  const [farmers, setFarmers] = useState<Farmer[]>([]);
   const [assignLoading, setAssignLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [showForm, setShowForm] = useState(false);
@@ -69,10 +69,16 @@ const LandList = () => {
   const [deleting, setDeleting] = useState<Land | null>(null);
   const [busy, setBusy] = useState(false);
   const [assigningLand, setAssigningLand] = useState<Land | null>(null);
-  const [selectedFarmerId, setSelectedFarmerId] = useState<string>("");
   const [unassigning, setUnassigning] = useState<FarmerLandAssignment | null>(null);
   const [tagPromptLand, setTagPromptLand] = useState<Land | null>(null);
   const [tagPromptValue, setTagPromptValue] = useState("");
+
+  // farmer picker state (inside assign dialog)
+  const [pickerQuery, setPickerQuery] = useState("");
+  const [pickerResults, setPickerResults] = useState<Farmer[]>([]);
+  const [pickerLoading, setPickerLoading] = useState(false);
+  const [pickerSelectedFarmer, setPickerSelectedFarmer] = useState<Farmer | null>(null);
+  const pickerDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -93,7 +99,6 @@ const LandList = () => {
   useEffect(() => {
     if (pumpId) {
       fetchLandsPaged(0);
-      fetchFarmers();
     }
   }, [pumpId]);
 
@@ -153,11 +158,27 @@ const LandList = () => {
     finally { setAssignLoading(false); }
   };
 
-  const fetchFarmers = async () => {
+  // Picker: load/search farmers with debounce
+  const loadPickerFarmers = async (q: string) => {
     if (!pumpId) return;
-    try { setFarmers(await farmerApi.getByPump(pumpId)); }
-    catch { /* silent */ }
+    setPickerLoading(true);
+    try {
+      const result = await farmerApi.searchPaged(pumpId, q, 0, PICKER_SIZE);
+      setPickerResults(result.content);
+    } catch { /* silent */ }
+    finally { setPickerLoading(false); }
   };
+
+  useEffect(() => {
+    if (!assigningLand || !pumpId) {
+      if (!assigningLand) { setPickerQuery(""); setPickerResults([]); setPickerSelectedFarmer(null); }
+      return;
+    }
+    const delay = pickerQuery ? 300 : 0;
+    if (pickerDebounce.current) clearTimeout(pickerDebounce.current);
+    pickerDebounce.current = setTimeout(() => loadPickerFarmers(pickerQuery), delay);
+    return () => { if (pickerDebounce.current) clearTimeout(pickerDebounce.current); };
+  }, [assigningLand, pickerQuery, pumpId]);
 
   const refreshAssignmentTabs = () => {
     fetchAssignments();
@@ -226,11 +247,11 @@ const LandList = () => {
   };
 
   const handleAssign = async () => {
-    if (!assigningLand || !selectedFarmerId || !currentSeasonId) return;
+    if (!assigningLand || !pickerSelectedFarmer || !currentSeasonId) return;
     setBusy(true);
     try {
       await assignmentApi.assign({
-        farmerId: parseInt(selectedFarmerId),
+        farmerId: pickerSelectedFarmer.id,
         landId: assigningLand.id,
         seasonId: currentSeasonId,
         year,
@@ -238,7 +259,6 @@ const LandList = () => {
       toast({ title: "সফল", description: "জমি বরাদ্দ হয়েছে" });
       const justAssigned = assigningLand;
       setAssigningLand(null);
-      setSelectedFarmerId("");
       refreshAssignmentTabs();
       setTagPromptLand(justAssigned);
       setTagPromptValue(justAssigned.tag ?? "");
@@ -582,25 +602,52 @@ const LandList = () => {
         <DialogContent>
           <DialogHeader><DialogTitle>জমি বরাদ্দ — {assigningLand?.landmarkNumber}</DialogTitle></DialogHeader>
           <div className="space-y-3">
+            <p className="text-sm text-muted-foreground">{season} / {year}</p>
+            {pickerSelectedFarmer && (
+              <div className="flex items-center gap-2 px-3 py-2 bg-primary/10 rounded-md">
+                <Users className="w-4 h-4 text-primary shrink-0" />
+                <span className="text-sm font-medium flex-1">{pickerSelectedFarmer.nameBengali}</span>
+                <span className="text-xs text-muted-foreground">{pickerSelectedFarmer.farmerCode}</span>
+                <button className="ml-1 text-muted-foreground hover:text-foreground" onClick={() => setPickerSelectedFarmer(null)}>
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            )}
             <div>
-              <Label>মৌসুম / বছর</Label>
-              <p className="text-sm text-muted-foreground">{season} / {year}</p>
+              <Label>কৃষক খুঁজুন</Label>
+              <Input
+                className="mt-1"
+                placeholder="নাম বা কোড লিখুন"
+                value={pickerQuery}
+                onChange={e => setPickerQuery(e.target.value)}
+              />
             </div>
-            <div>
-              <Label>কৃষক নির্বাচন করুন</Label>
-              <Select value={selectedFarmerId} onValueChange={setSelectedFarmerId}>
-                <SelectTrigger><SelectValue placeholder="কৃষক বেছে নিন" /></SelectTrigger>
-                <SelectContent>
-                  {farmers.map(f => (
-                    <SelectItem key={f.id} value={String(f.id)}>{f.nameBengali} ({f.farmerCode})</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+            <div className="max-h-48 overflow-y-auto border rounded-md">
+              {pickerLoading ? (
+                <div className="flex justify-center py-4">
+                  <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+                </div>
+              ) : pickerResults.length === 0 ? (
+                <div className="py-4 text-center text-sm text-muted-foreground">কোনো কৃষক পাওয়া যায়নি</div>
+              ) : (
+                pickerResults.map((f, i) => (
+                  <button
+                    key={f.id}
+                    className={`w-full text-left px-3 py-2 transition-colors hover:bg-accent ${
+                      pickerSelectedFarmer?.id === f.id ? "bg-primary/10" : ""
+                    } ${i > 0 ? "border-t" : ""}`}
+                    onClick={() => setPickerSelectedFarmer(f)}
+                  >
+                    <div className="text-sm font-medium">{f.nameBengali}</div>
+                    <div className="text-xs text-muted-foreground">{f.farmerCode} · {f.village}</div>
+                  </button>
+                ))
+              )}
             </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setAssigningLand(null)}>বাতিল</Button>
-            <Button onClick={handleAssign} disabled={busy || !selectedFarmerId || !currentSeasonId}>
+            <Button onClick={handleAssign} disabled={busy || !pickerSelectedFarmer || !currentSeasonId}>
               {busy && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}বরাদ্দ করুন
             </Button>
           </DialogFooter>
