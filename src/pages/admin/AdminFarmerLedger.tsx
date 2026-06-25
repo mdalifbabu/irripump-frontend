@@ -192,7 +192,6 @@ const AdminFarmerLedger = () => {
                     <div className="flex items-center justify-between flex-wrap gap-2">
                       <CardTitle className="text-base flex items-center gap-2">
                         {sl.seasonName} — {sl.year}
-                        {sl.seasonKind && <Badge variant="outline" className="text-xs">{sl.seasonKind}</Badge>}
                       </CardTitle>
                       <Badge variant={sl.outstanding <= 0 ? "default" : "destructive"}>
                         {sl.outstanding <= 0 ? "পরিশোধিত" : `৳${sl.outstanding.toFixed(0)} বকেয়া`}

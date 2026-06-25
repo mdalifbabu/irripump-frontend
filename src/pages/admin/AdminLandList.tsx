@@ -21,7 +21,6 @@ const adminNavItems = [
   { label: "জমি", path: "/admin/lands" },
   { label: "ইউনিট মূল্য", path: "/admin/unit-prices" },
   { label: "মৌসুম", path: "/admin/seasons" },
-  { label: "মৌসুম ধরন", path: "/admin/season-types" },
   { label: "অডিট লগ", path: "/admin/audit-log" },
   { label: "সেটিংস", path: "/admin/settings" },
 ];

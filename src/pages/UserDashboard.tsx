@@ -104,7 +104,6 @@ const UserDashboard = () => {
                           <div className="font-medium">{s.seasonNameBengali}</div>
                           <div className="text-xs text-muted-foreground flex items-center gap-1">
                             {s.seasonName}
-                            {s.seasonKind && <Badge variant="outline" className="text-xs h-4">{s.seasonKind}</Badge>}
                           </div>
                         </TableCell>
                         <TableCell className="text-right font-medium">{fmt(s.totalBilled)}</TableCell>

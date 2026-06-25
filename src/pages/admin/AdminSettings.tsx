@@ -19,7 +19,6 @@ const adminNavItems = [
   { label: "কৃষক", path: "/admin/farmers" },
   { label: "জমি", path: "/admin/lands" },
   { label: "মৌসুম", path: "/admin/seasons" },
-  { label: "মৌসুম ধরন", path: "/admin/season-types" },
   { label: "অডিট লগ", path: "/admin/audit-log" },
   { label: "সেটিংস", path: "/admin/settings" },
 ];

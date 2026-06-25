@@ -18,7 +18,6 @@ const adminNavItems = [
   { label: "ব্যবহারকারী", path: "/admin/users" },
   { label: "কৃষক", path: "/admin/farmers" },
   { label: "মৌসুম", path: "/admin/seasons" },
-  { label: "মৌসুম ধরন", path: "/admin/season-types" },
   { label: "অডিট লগ", path: "/admin/audit-log" },
   { label: "সেটিংস", path: "/admin/settings" },
 ];
@@ -132,7 +131,6 @@ const AdminSeasonList = () => {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>ধরন</TableHead>
                       <TableHead>নাম</TableHead>
                       <TableHead>শুরু</TableHead>
                       <TableHead>শেষ</TableHead>
@@ -142,7 +140,6 @@ const AdminSeasonList = () => {
                   <TableBody>
                     {seasons.map((s) => (
                       <TableRow key={s.id}>
-                        <TableCell>{s.seasonKind && <Badge variant="outline">{s.seasonKind}</Badge>}</TableCell>
                         <TableCell className="font-medium">
                           {s.seasonNameBengali}
                           <span className="text-xs text-muted-foreground ml-1">({s.seasonName})</span>

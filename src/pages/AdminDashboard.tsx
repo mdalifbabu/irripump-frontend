@@ -20,7 +20,6 @@ const adminNavItems = [
   { label: "ব্যবহারকারী", path: "/admin/users" },
   { label: "কৃষক", path: "/admin/farmers" },
   { label: "মৌসুম", path: "/admin/seasons" },
-  { label: "মৌসুম ধরন", path: "/admin/season-types" },
   { label: "অডিট লগ", path: "/admin/audit-log" },
   { label: "সেটিংস", path: "/admin/settings" },
 ];
@@ -29,7 +28,6 @@ const GROUP_BY_LABEL: Record<AdminDashboardGroupBy, string> = {
   pump: "পাম্প",
   operator: "অপারেটর",
   year: "বছর",
-  seasonType: "মৌসুম ধরন",
 };
 
 const AdminDashboard = () => {
@@ -99,7 +97,6 @@ const AdminDashboard = () => {
                     <SelectItem value="pump">পাম্প অনুসারে</SelectItem>
                     <SelectItem value="operator">অপারেটর অনুসারে</SelectItem>
                     <SelectItem value="year">বছর অনুসারে</SelectItem>
-                    <SelectItem value="seasonType">মৌসুম ধরন অনুসারে</SelectItem>
                   </SelectContent>
                 </Select>
                 <Input className="w-24" type="number" placeholder="বছর" value={yearFilter} onChange={(e) => setYearFilter(e.target.value)} onKeyDown={(e) => e.key === "Enter" && fetchAggregated()} />

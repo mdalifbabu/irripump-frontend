@@ -20,14 +20,8 @@ import { userNavItems } from "@/lib/navItems";
 
 
 
-const seasonKindOptions: { value: CreateSeasonRequest["seasonKind"]; label: string }[] = [
-  { value: "BORO", label: "বোরো (Boro)" },
-  { value: "AMAN", label: "আমন (Aman)" },
-  { value: "AUS", label: "আউশ (Aus)" },
-];
-
 const emptyForm: CreateSeasonRequest = {
-  pumpId: 0, seasonKind: "BORO", seasonName: "", seasonNameBengali: "",
+  pumpId: 0, seasonName: "", seasonNameBengali: "",
   description: "", startDate: "", endDate: "", year: new Date().getFullYear(),
   isActive: true, isCurrent: false,
 };
@@ -80,7 +74,7 @@ export default function SeasonList() {
   };
 
   const handleSave = async () => {
-    if (!form.seasonKind || !form.seasonName || !form.seasonNameBengali || !form.startDate || !form.endDate) {
+    if (!form.seasonName || !form.seasonNameBengali || !form.startDate || !form.endDate) {
       toast({ title: "Error", description: "সব প্রয়োজনীয় তথ্য পূরণ করুন", variant: "destructive" });
       return;
     }
@@ -248,17 +242,6 @@ export default function SeasonList() {
         <DialogContent className="max-w-md">
           <DialogHeader><DialogTitle>নতুন মৌসুম তৈরি করুন</DialogTitle></DialogHeader>
           <div className="space-y-3 py-2">
-            <div className="space-y-1">
-              <Label>মৌসুমের ধরন *</Label>
-              <Select value={form.seasonKind} onValueChange={(v) => setForm({ ...form, seasonKind: v as CreateSeasonRequest["seasonKind"] })}>
-                <SelectTrigger><SelectValue placeholder="মৌসুমের ধরন নির্বাচন করুন" /></SelectTrigger>
-                <SelectContent>
-                  {seasonKindOptions.map((opt) => (
-                    <SelectItem key={opt.value} value={opt.value as string}>{opt.label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
                 <Label>মৌসুমের নাম (ইংরেজি) *</Label>

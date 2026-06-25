@@ -6,7 +6,6 @@ import type {
   VerifyFarmerCodeRequest, CreateSettingRequest, FarmerLandAssignment, Season,
   AssignLandRequest, FarmerSummaryResponse, FarmerDetailResponse, CreateSeasonRequest,
   SeasonEnrollmentResponse, SeasonDashboard, LedgerResponse,
-  SeasonType, CreateSeasonTypeRequest, UpdateSeasonTypeRequest,
   AdminDashboardGroupBy, AdminDashboardResponse, AdjustDueRequest, ReasonRequest,
   DueEntry, AuditLogEntry, AuditLogSearchParams, PageResponse, PaymentResponse, InvoiceResponse, YearlyDashboard,
 } from "./types";
@@ -379,21 +378,6 @@ export const dashboardApi = {
   },
   getYearlySummary: async (pumpId: number, year: number): Promise<YearlyDashboard> =>
     apiRequest<YearlyDashboard>(`/dashboard/pump/${pumpId}/year/${year}/summary`),
-};
-
-// Season Type catalog (admin-managed; operators read the active list)
-export const seasonTypeApi = {
-  getActive: async (): Promise<SeasonType[]> => apiRequest<SeasonType[]>("/season-types"),
-};
-
-export const adminSeasonTypeApi = {
-  getAll: async (): Promise<SeasonType[]> => apiRequest<SeasonType[]>("/admin/season-types"),
-  create: async (data: CreateSeasonTypeRequest): Promise<SeasonType> =>
-    apiRequest<SeasonType>("/admin/season-types", { method: "POST", body: JSON.stringify(data) }),
-  update: async (id: number, data: UpdateSeasonTypeRequest): Promise<SeasonType> =>
-    apiRequest<SeasonType>(`/admin/season-types/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
-  delete: async (id: number): Promise<void> =>
-    apiRequest<void>(`/admin/season-types/${id}`, { method: "DELETE" }),
 };
 
 // Aggregated cross-cutting admin dashboard

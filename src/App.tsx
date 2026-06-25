@@ -23,7 +23,6 @@ import AdminSettings from "./pages/admin/AdminSettings";
 import AdminFarmerList from "./pages/admin/AdminFarmerList";
 import AdminLandList from "./pages/admin/AdminLandList";
 import AdminUnitPriceList from "./pages/admin/AdminUnitPriceList";
-import SeasonTypeList from "./pages/admin/SeasonTypeList";
 import AuditLogViewer from "./pages/admin/AuditLogViewer";
 import AdminSeasonList from "./pages/admin/AdminSeasonList";
 import AdminFarmerLedger from "./pages/admin/AdminFarmerLedger";
@@ -66,7 +65,6 @@ const App = () => (
               <Route path="/admin/farmers/:farmerId/ledger" element={<ProtectedRoute role="ADMIN"><AdminFarmerLedger /></ProtectedRoute>} />
               <Route path="/admin/lands" element={<ProtectedRoute role="ADMIN"><AdminLandList /></ProtectedRoute>} />
               <Route path="/admin/unit-prices" element={<ProtectedRoute role="ADMIN"><AdminUnitPriceList /></ProtectedRoute>} />
-              <Route path="/admin/season-types" element={<ProtectedRoute role="ADMIN"><SeasonTypeList /></ProtectedRoute>} />
               <Route path="/admin/seasons" element={<ProtectedRoute role="ADMIN"><AdminSeasonList /></ProtectedRoute>} />
               <Route path="/admin/audit-log" element={<ProtectedRoute role="ADMIN"><AuditLogViewer /></ProtectedRoute>} />
 

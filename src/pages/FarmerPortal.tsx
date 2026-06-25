@@ -18,7 +18,6 @@ import {
   TableRow,
 } from "@/components/ui/table";
 
-const KIND_LABEL: Record<string, string> = { BORO: "বোরো", AMAN: "আমন", AUS: "আউশ" };
 
 const FarmerPortal = () => {
   const [farmerCode, setFarmerCode] = useState("");
@@ -307,7 +306,7 @@ const FarmerPortal = () => {
 
 function SeasonLedgerRow({ sl, isCurrentSeason }: { sl: SeasonLedger; isCurrentSeason: boolean }) {
   const isPaid = sl.outstanding <= 0;
-  const seasonLabel = KIND_LABEL[sl.seasonKind ?? ""] ?? sl.seasonName;
+  const seasonLabel = sl.seasonName;
 
   return (
     <div className={`rounded-lg border p-4 space-y-3 ${

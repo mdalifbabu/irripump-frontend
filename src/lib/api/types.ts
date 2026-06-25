@@ -86,11 +86,8 @@ export interface FarmerLandAssignment {
   createdAt?: string;
 }
 
-export type SeasonKind = "BORO" | "AMAN" | "AUS";
-
 export interface Season {
   id: number;
-  seasonKind?: SeasonKind;
   seasonName: string;
   seasonNameBengali: string;
   description?: string;
@@ -108,7 +105,6 @@ export interface Season {
 
 export interface SeasonDashboard {
   seasonId: number;
-  seasonKind?: SeasonKind;
   seasonName: string;
   seasonNameBengali: string;
   year: number;
@@ -132,7 +128,6 @@ export interface LedgerAllocation {
 export interface SeasonLedger {
   dueId: number;
   seasonId: number;
-  seasonKind?: SeasonKind;
   seasonName: string;
   year: number;
   billed: number;
@@ -152,7 +147,6 @@ export interface LedgerResponse {
 
 export interface CreateSeasonRequest {
   pumpId: number;
-  seasonKind: SeasonKind;
   seasonName: string;
   seasonNameBengali: string;
   description?: string;
@@ -360,7 +354,6 @@ export interface YearlySeasonSummary {
   seasonId: number;
   seasonName: string;
   seasonNameBengali: string;
-  seasonKind?: string;
   totalBilled: number;
   totalCollected: number;
   totalOutstanding: number;
@@ -419,34 +412,9 @@ export interface CreateSettingRequest {
   category: string;
 }
 
-// ── Admin module: season-type catalog, dashboard, overrides, audit log ──────────
+// ── Admin module: dashboard, overrides, audit log ──────────
 
-export interface SeasonType {
-  id: number;
-  code: SeasonKind;
-  nameEnglish: string;
-  nameBengali: string;
-  description?: string;
-  isActive?: boolean;
-  createdAt?: string;
-  updatedAt?: string;
-}
-
-export interface CreateSeasonTypeRequest {
-  code: string;
-  nameEnglish: string;
-  nameBengali: string;
-  description?: string;
-}
-
-export interface UpdateSeasonTypeRequest {
-  nameEnglish?: string;
-  nameBengali?: string;
-  description?: string;
-  isActive?: boolean;
-}
-
-export type AdminDashboardGroupBy = "pump" | "operator" | "year" | "seasonType";
+export type AdminDashboardGroupBy = "pump" | "operator" | "year";
 
 export interface AdminDashboardRow {
   key: string;
