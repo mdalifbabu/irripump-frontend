@@ -11,8 +11,8 @@ import type {
 } from "./types";
 
 //const API_BASE_URL = "http://localhost:8081/api";
-const API_BASE_URL = "http://192.168.0.106:8081/api";
-//const API_BASE_URL = "https://api.irripump.com/api";
+//const API_BASE_URL = "http://192.168.0.106:8081/api";
+const API_BASE_URL = "https://api.irripump.com/api";
 
 const TOKEN_KEY = "irripump_token";
 const REFRESH_TOKEN_KEY = "irripump_refresh_token";
