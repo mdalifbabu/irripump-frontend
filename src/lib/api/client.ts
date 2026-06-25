@@ -1,11 +1,13 @@
 import type {
   AuthResponse, User, Pump, Farmer, Land, UnitPrice, Payment, DashboardStats,
-  Setting, FarmerPortalData, LoginRequest, RefreshTokenRequest, CreateUserRequest,
-  UpdateUserRequest, CreatePumpRequest, CreateFarmerRequest, CreateLandRequest,
+  FarmerPortalData, LoginRequest, RefreshTokenRequest, CreateUserRequest,
+  UpdateUserRequest, CreatePumpRequest, CreateFarmerRequest, CreateLandRequest, UpdateLandRequest,
   CreateUnitPriceRequest, UpdateUnitPriceRequest, CreatePaymentRequest, UpdatePaymentRequest,
-  VerifyFarmerCodeRequest, CreateSettingRequest, FarmerLandAssignment, Season,
+  VerifyFarmerCodeRequest, FarmerLandAssignment, Season,
   AssignLandRequest, FarmerSummaryResponse, FarmerDetailResponse, CreateSeasonRequest,
   SeasonEnrollmentResponse, SeasonDashboard, LedgerResponse,
+  AdminDashboardGroupBy, AdminDashboardResponse, AdjustDueRequest, ReasonRequest,
+  DueEntry, AuditLogEntry, AuditLogSearchParams, PageResponse, PaymentResponse, InvoiceResponse, YearlyDashboard,
 } from "./types";
 
 //const API_BASE_URL = "http://localhost:8081/api";
@@ -59,13 +61,28 @@ async function apiRequest<T>(endpoint: string, options: RequestInit = {}): Promi
           if (!retry.ok) throw new Error(`API Error: ${retry.status}`);
           return retry.json();
         }
+        const errData = await refreshResponse.json().catch(() => ({})) as { errorCode?: string };
+        if (errData.errorCode === "ACCOUNT_DEACTIVATED") {
+          localStorage.setItem("irripump_flash", JSON.stringify({ type: "deactivated" }));
+        }
       } catch {
-        tokenManager.clear();
-        window.location.href = "/auth";
+        // network error or retry failed — fall through to clear + redirect
       }
     }
     tokenManager.clear();
     window.location.href = "/auth";
+    return {} as T;
+  }
+
+  if (response.status === 403) {
+    const errData = await response.json().catch(() => ({})) as { errorCode?: string; message?: string };
+    if (errData.errorCode === "ACCOUNT_DEACTIVATED") {
+      tokenManager.clear();
+      localStorage.setItem("irripump_flash", JSON.stringify({ type: "deactivated" }));
+      window.location.href = "/auth";
+      return {} as T;
+    }
+    throw new Error(errData.message || "Access denied");
   }
 
   if (!response.ok) {
@@ -129,6 +146,10 @@ export const userApi = {
     apiRequest<void>(`/admin/users/${userId}/pumps/${pumpId}`, { method: "DELETE" }),
   impersonate: async (userId: number): Promise<{ token: string }> =>
     apiRequest<{ token: string }>(`/admin/users/${userId}/impersonate`, { method: "POST" }),
+  setStatus: async (userId: number, isActive: boolean): Promise<User> =>
+    apiRequest<User>(`/admin/users/${userId}/status`, { method: "PATCH", body: JSON.stringify({ isActive }) }),
+  reactivate: async (userId: number): Promise<User> =>
+    apiRequest<User>(`/admin/users/${userId}/reactivate`, { method: "PUT" }),
 };
 
 // Admin stats
@@ -140,6 +161,12 @@ export const adminApi = {
     if (pumpId) params.append("pumpId", String(pumpId));
     if (query) params.append("query", query);
     return apiRequest<Farmer[]>(`/admin/farmers?${params}`);
+  },
+  getFarmersPaged: async (pumpId: number | undefined, query: string, page: number, size: number): Promise<PageResponse<Farmer>> => {
+    const params = new URLSearchParams({ page: String(page), size: String(size) });
+    if (pumpId) params.append("pumpId", String(pumpId));
+    if (query) params.append("query", query);
+    return apiRequest<PageResponse<Farmer>>(`/admin/farmers/paged?${params}`);
   },
 };
 
@@ -153,6 +180,10 @@ export const pumpApi = {
     apiRequest<Pump>(`/admin/pumps/${id}`, { method: "PUT", body: JSON.stringify(data) }),
   delete: async (id: number): Promise<void> =>
     apiRequest<void>(`/admin/pumps/${id}`, { method: "DELETE" }),
+  hardDelete: async (id: number, reason: string): Promise<void> =>
+    apiRequest<void>(`/admin/pumps/${id}?force=true`, { method: "DELETE", body: JSON.stringify({ reason }) }),
+  reassign: async (id: number, operatorId: number): Promise<Pump> =>
+    apiRequest<Pump>(`/admin/pumps/${id}/assign`, { method: "PATCH", body: JSON.stringify({ operatorId }) }),
   getAssigned: async (): Promise<Pump[]> => apiRequest<Pump[]>("/user/assigned-pumps"),
 };
 
@@ -164,6 +195,8 @@ export const farmerApi = {
     apiRequest<Farmer[]>(`/farmers/pump/${pumpId}`),
   search: async (pumpId: number, query: string): Promise<Farmer[]> =>
     apiRequest<Farmer[]>(`/farmers/pump/${pumpId}/search?query=${encodeURIComponent(query)}`),
+  searchPaged: async (pumpId: number, q: string, page: number, size: number): Promise<PageResponse<Farmer>> =>
+    apiRequest<PageResponse<Farmer>>(`/farmers/pump/${pumpId}/search/paged?q=${encodeURIComponent(q)}&page=${page}&size=${size}`),
   getSummary: async (pumpId: number, seasonId: number, year: number): Promise<FarmerSummaryResponse[]> =>
     apiRequest<FarmerSummaryResponse[]>(`/farmers/pump/${pumpId}/summary?seasonId=${seasonId}&year=${year}`),
   getById: async (id: number): Promise<Farmer> => apiRequest<Farmer>(`/farmers/${id}`),
@@ -187,8 +220,17 @@ export const landApi = {
     apiRequest<Land[]>(`/lands/available?pumpId=${pumpId}&seasonId=${seasonId}&year=${year}`),
   search: async (pumpId: number, query: string): Promise<Land[]> =>
     apiRequest<Land[]>(`/lands/search?pumpId=${pumpId}&query=${encodeURIComponent(query)}`),
+  getByPumpPaged: async (pumpId: number, page: number, size: number, query?: string): Promise<PageResponse<Land>> => {
+    const qs = new URLSearchParams({ pumpId: String(pumpId), page: String(page), size: String(size) });
+    if (query) qs.append("query", query);
+    return apiRequest<PageResponse<Land>>(`/lands/paged?${qs}`);
+  },
   getById: async (id: number): Promise<Land> => apiRequest<Land>(`/lands/${id}`),
-  update: async (id: number, data: Partial<CreateLandRequest>): Promise<Land> =>
+  getAssignedPaged: async (pumpId: number, seasonId: number, year: number, page: number, size: number): Promise<PageResponse<Land>> =>
+    apiRequest<PageResponse<Land>>(`/lands/assigned/paged?pumpId=${pumpId}&seasonId=${seasonId}&year=${year}&page=${page}&size=${size}`),
+  getUnassignedPaged: async (pumpId: number, seasonId: number, year: number, page: number, size: number): Promise<PageResponse<Land>> =>
+    apiRequest<PageResponse<Land>>(`/lands/unassigned/paged?pumpId=${pumpId}&seasonId=${seasonId}&year=${year}&page=${page}&size=${size}`),
+  update: async (id: number, data: UpdateLandRequest): Promise<Land> =>
     apiRequest<Land>(`/lands/${id}`, { method: "PUT", body: JSON.stringify(data) }),
   delete: async (id: number): Promise<void> =>
     apiRequest<void>(`/lands/${id}`, { method: "DELETE" }),
@@ -201,12 +243,14 @@ export const adminLandApi = {
   getByPump: async (pumpId: number): Promise<Land[]> =>
     apiRequest<Land[]>(`/admin/lands?pumpId=${pumpId}`),
   getById: async (id: number): Promise<Land> => apiRequest<Land>(`/admin/lands/${id}`),
-  update: async (id: number, data: Partial<CreateLandRequest>): Promise<Land> =>
+  update: async (id: number, data: UpdateLandRequest): Promise<Land> =>
     apiRequest<Land>(`/admin/lands/${id}`, { method: "PUT", body: JSON.stringify(data) }),
   delete: async (id: number): Promise<void> =>
     apiRequest<void>(`/admin/lands/${id}`, { method: "DELETE" }),
   search: async (pumpId: number, query: string): Promise<Land[]> =>
     apiRequest<Land[]>(`/admin/lands/search?pumpId=${pumpId}&query=${encodeURIComponent(query)}`),
+  getDuplicateLandmarks: async (): Promise<Land[]> =>
+    apiRequest<Land[]>("/admin/lands/duplicate-landmarks"),
 };
 
 // Farmer-Land Assignment API
@@ -258,6 +302,10 @@ export const seasonApi = {
     apiRequest<Season>(`/seasons/${id}/set-current`, { method: "PUT" }),
   delete: async (id: number): Promise<void> =>
     apiRequest<void>(`/seasons/${id}`, { method: "DELETE" }),
+  getFarmerHistory: async (farmerId: number, page: number, size: number): Promise<PageResponse<Season>> => {
+    const qs = new URLSearchParams({ page: String(page), size: String(size) });
+    return apiRequest<PageResponse<Season>>(`/seasons/farmer/${farmerId}/history?${qs}`);
+  },
 };
 
 // Unit Price API
@@ -285,16 +333,37 @@ export const adminUnitPriceApi = {
 
 // Payment API
 export const paymentApi = {
-  create: async (farmerId: number, data: CreatePaymentRequest): Promise<Payment> =>
-    apiRequest<Payment>(`/payments/farmer/${farmerId}`, { method: "POST", body: JSON.stringify(data) }),
+  create: async (farmerId: number, data: CreatePaymentRequest, seasonId?: number): Promise<Payment> => {
+    const qs = seasonId ? `?seasonId=${seasonId}` : "";
+    return apiRequest<Payment>(`/payments/farmer/${farmerId}${qs}`, { method: "POST", body: JSON.stringify(data) });
+  },
   update: async (id: number, data: UpdatePaymentRequest): Promise<Payment> =>
     apiRequest<Payment>(`/payments/${id}/update`, { method: "PUT", body: JSON.stringify(data) }),
   getByFarmer: async (farmerId: number): Promise<Payment[]> =>
     apiRequest<Payment[]>(`/payments/farmer/${farmerId}`),
+  getByFarmerPaged: async (farmerId: number, page: number, size: number, seasonId?: number, year?: number): Promise<PageResponse<Payment>> => {
+    const qs = new URLSearchParams({ page: String(page), size: String(size) });
+    if (seasonId) qs.append("seasonId", String(seasonId));
+    else if (year) qs.append("year", String(year));
+    return apiRequest<PageResponse<Payment>>(`/payments/farmer/${farmerId}/paged?${qs}`);
+  },
   delete: async (id: number): Promise<void> =>
     apiRequest<void>(`/payments/${id}`, { method: "DELETE" }),
   getTotalPaid: async (farmerId: number): Promise<number> =>
     apiRequest<number>(`/payments/farmer/${farmerId}/total`),
+  getByPump: async (pumpId: number): Promise<Payment[]> =>
+    apiRequest<Payment[]>(`/payments/pump/${pumpId}`),
+  getByPumpPaged: async (
+    pumpId: number, page: number, size: number,
+    filters?: { farmerName?: string; paymentDate?: string; reference?: string; seasonId?: number }
+  ): Promise<PageResponse<PaymentResponse>> => {
+    const qs = new URLSearchParams({ pumpId: String(pumpId), page: String(page), size: String(size) });
+    if (filters?.farmerName) qs.append("farmerName", filters.farmerName);
+    if (filters?.paymentDate) qs.append("paymentDate", filters.paymentDate);
+    if (filters?.reference) qs.append("reference", filters.reference);
+    if (filters?.seasonId) qs.append("seasonId", String(filters.seasonId));
+    return apiRequest<PageResponse<PaymentResponse>>(`/payments/pump/${pumpId}/paged?${qs}`);
+  },
 };
 
 // Dashboard API
@@ -305,6 +374,48 @@ export const dashboardApi = {
     if (year) params.append("year", String(year));
     return apiRequest<DashboardStats>(`/dashboard/pump/${pumpId}/stats?${params}`);
   },
+  getYearlySummary: async (pumpId: number, year: number): Promise<YearlyDashboard> =>
+    apiRequest<YearlyDashboard>(`/dashboard/pump/${pumpId}/year/${year}/summary`),
+};
+
+// Aggregated cross-cutting admin dashboard
+export const adminDashboardApi = {
+  getAggregated: async (groupBy: AdminDashboardGroupBy, year?: number, pumpId?: number): Promise<AdminDashboardResponse> => {
+    const params = new URLSearchParams({ groupBy });
+    if (year) params.append("year", String(year));
+    if (pumpId) params.append("pumpId", String(pumpId));
+    return apiRequest<AdminDashboardResponse>(`/admin/dashboard?${params}`);
+  },
+};
+
+// Admin override authority — each action requires a reason, each is audited
+export const adminOverrideApi = {
+  adjustDue: async (dueId: number, data: AdjustDueRequest): Promise<DueEntry> =>
+    apiRequest<DueEntry>(`/admin/dues/${dueId}/adjust`, { method: "POST", body: JSON.stringify(data) }),
+  reversePayment: async (paymentId: number, data: ReasonRequest): Promise<Payment> =>
+    apiRequest<Payment>(`/admin/payments/${paymentId}/reverse`, { method: "POST", body: JSON.stringify(data) }),
+  forceRemoveFarmer: async (seasonId: number, farmerId: number, data: ReasonRequest): Promise<void> =>
+    apiRequest<void>(`/admin/seasons/${seasonId}/farmers/${farmerId}?force=true`, {
+      method: "DELETE", body: JSON.stringify(data),
+    }),
+  hardDeleteSeason: async (seasonId: number, data: ReasonRequest): Promise<void> =>
+    apiRequest<void>(`/admin/seasons/${seasonId}?force=true`, { method: "DELETE", body: JSON.stringify(data) }),
+};
+
+// Read-only audit log
+export const auditLogApi = {
+  search: async (params: AuditLogSearchParams): Promise<PageResponse<AuditLogEntry>> => {
+    const qs = new URLSearchParams();
+    if (params.actorId) qs.append("actorId", String(params.actorId));
+    if (params.entityType) qs.append("entityType", params.entityType);
+    if (params.from) qs.append("from", params.from);
+    if (params.to) qs.append("to", params.to);
+    qs.append("page", String(params.page ?? 0));
+    qs.append("size", String(params.size ?? 50));
+    return apiRequest<PageResponse<AuditLogEntry>>(`/admin/audit?${qs}`);
+  },
+  getTableNames: async (): Promise<string[]> =>
+    apiRequest<string[]>("/admin/audit/tables"),
 };
 
 // Season Enrollment API
@@ -334,40 +445,33 @@ export const enrollmentApi = {
   /** Remove a farmer from this season */
   unenroll: async (seasonId: number, farmerId: number): Promise<void> =>
     apiRequest<void>(`/seasons/${seasonId}/enrollments/${farmerId}`, { method: "DELETE" }),
+
+  /** Magic Button: transfer all farmers + land assignments from sourceSeasonId into targetSeasonId */
+  transferFrom: async (targetSeasonId: number, sourceSeasonId: number): Promise<{ transferredFarmers: number }> =>
+    apiRequest<{ transferredFarmers: number }>(
+      `/seasons/${targetSeasonId}/enrollments/transfer-from/${sourceSeasonId}`,
+      { method: "POST" }
+    ),
 };
 
-// Reports API
+// Reports API (payment receipt is still server-rendered — out of scope for the invoice rework)
 export const reportsApi = {
-  downloadInvoice: async (farmerId: number): Promise<Blob> => {
+  downloadPaymentReceipt: async (farmerId: number): Promise<Blob> => {
     const token = tokenManager.getToken();
-    const response = await fetch(`${API_BASE_URL}/reports/farmer/${farmerId}/invoice`, {
+    const response = await fetch(`${API_BASE_URL}/reports/farmer/${farmerId}/payment-receipt`, {
       headers: { Authorization: token || "" },
     });
-    if (!response.ok) throw new Error("Failed to download invoice");
-    return response.blob();
-  },
-  downloadJasperInvoice: async (farmerId: number, season: string, year: number): Promise<Blob> => {
-    const token = tokenManager.getToken();
-    const response = await fetch(
-      `${API_BASE_URL}/reports/invoice/farmer/${farmerId}?season=${encodeURIComponent(season)}&year=${year}`,
-      { headers: { Authorization: token || "" } }
-    );
-    if (!response.ok) throw new Error("Failed to generate invoice");
+    if (!response.ok) throw new Error("Failed to download receipt");
     return response.blob();
   },
 };
 
-// Settings API
-export const settingsApi = {
-  save: async (pumpId: number, data: CreateSettingRequest): Promise<Setting> =>
-    apiRequest<Setting>(`/settings/pump/${pumpId}`, { method: "POST", body: JSON.stringify(data) }),
-  getAll: async (pumpId: number): Promise<Setting[]> =>
-    apiRequest<Setting[]>(`/settings/pump/${pumpId}`),
-  get: async (pumpId: number, key: string): Promise<string> =>
-    apiRequest<string>(`/settings/pump/${pumpId}/${key}`),
-  delete: async (id: number): Promise<void> =>
-    apiRequest<void>(`/settings/${id}`, { method: "DELETE" }),
+// Invoice API — JSON only; the PDF is built client-side, see lib/invoice/buildInvoicePdf.ts
+export const invoiceApi = {
+  get: async (paymentId: number): Promise<InvoiceResponse> =>
+    apiRequest<InvoiceResponse>(`/invoices/${paymentId}`),
 };
+
 
 // Farmer Portal API
 export const farmerPortalApi = {
@@ -379,6 +483,8 @@ export const farmerPortalApi = {
 
 // Ledger API
 export const ledgerApi = {
-  getLedger: async (farmerId: number): Promise<LedgerResponse> =>
-    apiRequest<LedgerResponse>(`/farmers/${farmerId}/ledger`),
+  getLedger: async (farmerId: number, seasonId?: number): Promise<LedgerResponse> => {
+    const qs = seasonId ? `?seasonId=${seasonId}` : "";
+    return apiRequest<LedgerResponse>(`/farmers/${farmerId}/ledger${qs}`);
+  },
 };

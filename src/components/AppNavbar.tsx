@@ -29,9 +29,10 @@ const AppNavbar = ({ title, subtitle, navItems, rightContent }: AppNavbarProps) 
 
   return (
     <nav className="bg-card border-b border-border px-4 md:px-6 py-3">
-      <div className="max-w-7xl mx-auto">
+      <div className="max-w-7xl mx-auto space-y-2">
+        {/* Row 1: logo + title + hamburger */}
         <div className="flex justify-between items-center">
-          <div className="flex items-center gap-2 md:gap-3">
+          <div className="flex items-center gap-2 md:gap-3 min-w-0">
             <div className="w-8 h-8 md:w-10 md:h-10 bg-primary rounded-full flex items-center justify-center flex-shrink-0">
               <Droplet className="w-4 h-4 md:w-6 md:h-6 text-primary-foreground" />
             </div>
@@ -41,8 +42,8 @@ const AppNavbar = ({ title, subtitle, navItems, rightContent }: AppNavbarProps) 
             </div>
           </div>
 
-          {/* Desktop nav */}
-          <div className="hidden md:flex items-center gap-2">
+          {/* Desktop nav links */}
+          <div className="hidden md:flex items-center gap-1 flex-wrap justify-end max-w-[70%]">
             {navItems.map((item) => (
               <Button
                 key={item.path}
@@ -53,7 +54,6 @@ const AppNavbar = ({ title, subtitle, navItems, rightContent }: AppNavbarProps) 
                 {item.label}
               </Button>
             ))}
-            {rightContent}
             <Button variant="outline" size="sm" onClick={handleLogout}>
               <LogOut className="w-4 h-4 mr-1" />
               Logout
@@ -71,9 +71,16 @@ const AppNavbar = ({ title, subtitle, navItems, rightContent }: AppNavbarProps) 
           </Button>
         </div>
 
+        {/* Row 2 (desktop): rightContent (PumpSelector, etc.) on its own line */}
+        {rightContent && (
+          <div className="hidden md:flex items-center gap-2 flex-wrap">
+            {rightContent}
+          </div>
+        )}
+
         {/* Mobile menu */}
         {mobileMenuOpen && (
-          <div className="md:hidden mt-3 pt-3 border-t border-border space-y-1">
+          <div className="md:hidden mt-1 pt-3 border-t border-border space-y-1">
             {navItems.map((item) => (
               <Button
                 key={item.path}

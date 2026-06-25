@@ -27,7 +27,8 @@ const adminNavItems = [
   { label: "পাম্প", path: "/admin/pumps" },
   { label: "ব্যবহারকারী", path: "/admin/users" },
   { label: "কৃষক", path: "/admin/farmers" },
-  { label: "সেটিংস", path: "/admin/settings" },
+  { label: "মৌসুম", path: "/admin/seasons" },
+  { label: "অডিট লগ", path: "/admin/audit-log" },
 ];
 
 const createUserSchema = z.object({

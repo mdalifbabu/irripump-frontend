@@ -2,10 +2,15 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
-import { adminApi } from "@/lib/api/client";
-import { Droplet, Users, Plus, Building, Settings } from "lucide-react";
+import { adminApi, adminDashboardApi } from "@/lib/api/client";
+import type { AdminDashboardGroupBy, AdminDashboardResponse } from "@/lib/api/types";
+import { Droplet, Users, Plus, Building } from "lucide-react";
 import AppNavbar from "@/components/AppNavbar";
 import PumpSelector from "@/components/PumpSelector";
 
@@ -14,12 +19,23 @@ const adminNavItems = [
   { label: "পাম্প", path: "/admin/pumps" },
   { label: "ব্যবহারকারী", path: "/admin/users" },
   { label: "কৃষক", path: "/admin/farmers" },
-  { label: "সেটিংস", path: "/admin/settings" },
+  { label: "মৌসুম", path: "/admin/seasons" },
+  { label: "অডিট লগ", path: "/admin/audit-log" },
 ];
+
+const GROUP_BY_LABEL: Record<AdminDashboardGroupBy, string> = {
+  pump: "পাম্প",
+  operator: "অপারেটর",
+  year: "বছর",
+};
 
 const AdminDashboard = () => {
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState({ totalPumps: 0, totalUsers: 0, totalFarmers: 0 });
+  const [groupBy, setGroupBy] = useState<AdminDashboardGroupBy>("pump");
+  const [yearFilter, setYearFilter] = useState("");
+  const [aggregated, setAggregated] = useState<AdminDashboardResponse | null>(null);
+  const [aggLoading, setAggLoading] = useState(false);
   const navigate = useNavigate();
   const { toast } = useToast();
   const { user, isAuthenticated, isLoading } = useAuth();
@@ -41,6 +57,19 @@ const AdminDashboard = () => {
     finally { setLoading(false); }
   };
 
+  const fetchAggregated = async () => {
+    setAggLoading(true);
+    try {
+      setAggregated(await adminDashboardApi.getAggregated(groupBy, yearFilter ? Number(yearFilter) : undefined));
+    } catch (e: any) {
+      toast({ title: "Error", description: e.message, variant: "destructive" });
+    } finally { setAggLoading(false); }
+  };
+
+  useEffect(() => {
+    if (!isLoading && isAuthenticated && user?.role === "ADMIN") fetchAggregated();
+  }, [isLoading, isAuthenticated, user, groupBy]);
+
   if (isLoading) {
     return <div className="min-h-screen flex items-center justify-center"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div></div>;
   }
@@ -57,6 +86,61 @@ const AdminDashboard = () => {
         </div>
 
         <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between flex-wrap gap-3">
+              <CardTitle>সমগ্র ব্যবস্থার রিপোর্ট</CardTitle>
+              <div className="flex gap-2 items-center">
+                <Select value={groupBy} onValueChange={(v: AdminDashboardGroupBy) => setGroupBy(v)}>
+                  <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="pump">পাম্প অনুসারে</SelectItem>
+                    <SelectItem value="operator">অপারেটর অনুসারে</SelectItem>
+                    <SelectItem value="year">বছর অনুসারে</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Input className="w-24" type="number" placeholder="বছর" value={yearFilter} onChange={(e) => setYearFilter(e.target.value)} onKeyDown={(e) => e.key === "Enter" && fetchAggregated()} />
+                <Button size="sm" variant="outline" onClick={fetchAggregated} disabled={aggLoading}>খুঁজুন</Button>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {aggLoading ? (
+              <div className="flex justify-center py-8"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div></div>
+            ) : !aggregated || aggregated.rows.length === 0 ? (
+              <p className="text-center py-8 text-muted-foreground">কোনো তথ্য পাওয়া যায়নি।</p>
+            ) : (
+              <>
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>{GROUP_BY_LABEL[groupBy]}</TableHead>
+                        <TableHead>মোট দেনা</TableHead>
+                        <TableHead>মোট আদায়</TableHead>
+                        <TableHead>বকেয়া</TableHead>
+                        {groupBy === "operator" && <TableHead>আদায়ের হার</TableHead>}
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {aggregated.rows.map((row) => (
+                        <TableRow key={row.key}>
+                          <TableCell className="font-medium">{row.label}</TableCell>
+                          <TableCell>৳{row.totalBilled.toFixed(2)}</TableCell>
+                          <TableCell className="text-green-700">৳{row.totalCollected.toFixed(2)}</TableCell>
+                          <TableCell className={row.totalOutstanding > 0 ? "text-red-600" : ""}>৳{row.totalOutstanding.toFixed(2)}</TableCell>
+                          {groupBy === "operator" && <TableCell>{row.collectionRate != null ? `${(row.collectionRate * 100).toFixed(1)}%` : "—"}</TableCell>}
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+                <p className="text-sm text-muted-foreground mt-3">সিস্টেম-জুড়ে বকেয়া: <span className="font-semibold text-red-600">৳{aggregated.systemWideOutstanding.toFixed(2)}</span></p>
+              </>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
           <CardHeader><CardTitle>দ্রুত কার্যক্রম</CardTitle></CardHeader>
           <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Button className="w-full justify-start" variant="outline" onClick={() => navigate("/admin/pumps")}><Droplet className="w-4 h-4 mr-2" />পাম্প পরিচালনা</Button>
@@ -64,7 +148,6 @@ const AdminDashboard = () => {
             <Button className="w-full justify-start" variant="outline" onClick={() => navigate("/admin/users")}><Users className="w-4 h-4 mr-2" />ব্যবহারকারী পরিচালনা</Button>
             <Button className="w-full justify-start" variant="outline" onClick={() => navigate("/admin/users/create")}><Plus className="w-4 h-4 mr-2" />নতুন ব্যবহারকারী</Button>
             <Button className="w-full justify-start" variant="outline" onClick={() => navigate("/admin/farmers")}><Building className="w-4 h-4 mr-2" />সকল কৃষক</Button>
-            <Button className="w-full justify-start" variant="outline" onClick={() => navigate("/admin/settings")}><Settings className="w-4 h-4 mr-2" />সিস্টেম সেটিংস</Button>
           </CardContent>
         </Card>
       </main>

@@ -12,24 +12,21 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { usePumpContext } from "@/contexts/PumpContext";
-import { farmerApi, assignmentApi, paymentApi, unitPriceApi, seasonApi, reportsApi } from "@/lib/api/client";
+import { farmerApi, assignmentApi, paymentApi, unitPriceApi, seasonApi, invoiceApi, ledgerApi } from "@/lib/api/client";
+import { buildReceiptHtml, printReceiptHtml } from "@/lib/invoice/buildReceiptHtml";
 import type { Farmer, FarmerLandAssignment, Payment, UnitPrice, Season, FarmerDetailResponse } from "@/lib/api/types";
 import { CreditCard, Map, Phone, Mail, MapPin, Pencil, Trash2, Loader2, TrendingUp, TrendingDown, FileDown } from "lucide-react";
 import AppNavbar from "@/components/AppNavbar";
 import PumpSelector from "@/components/PumpSelector";
+import PaginationBar from "@/components/PaginationBar";
+import { userNavItems } from "@/lib/navItems";
 
-const userNavItems = [
-  { label: "ড্যাশবোর্ড", path: "/user/dashboard" },
-  { label: "কৃষক", path: "/user/farmers" },
-  { label: "মৌসুম", path: "/user/seasons" },
-  { label: "জমি", path: "/user/lands" },
-  { label: "ইউনিট মূল্য", path: "/user/unit-prices" },
-];
+const PAY_PAGE_SIZE = 10;
+const SEASON_PAGE_SIZE = 5;
 
 interface SeasonSummary {
   season: Season;
   assignments: FarmerLandAssignment[];
-  totalLandBigha: number;
   totalLandShatak: number;
   totalPaid: number;
   calculatedCost: number;
@@ -43,7 +40,13 @@ const FarmerDetail = () => {
   const [farmerDetail, setFarmerDetail] = useState<FarmerDetailResponse | null>(null);
   const [allSeasons, setAllSeasons] = useState<Season[]>([]);
   const [seasonSummaries, setSeasonSummaries] = useState<SeasonSummary[]>([]);
+  const [seasonHistoryPage, setSeasonHistoryPage] = useState(0);
+  const [seasonHistoryTotal, setSeasonHistoryTotal] = useState(0);
+  const [seasonHistoryTotalPages, setSeasonHistoryTotalPages] = useState(0);
   const [payments, setPayments] = useState<Payment[]>([]);
+  const [payTotalElements, setPayTotalElements] = useState(0);
+  const [payCurrentPage, setPayCurrentPage] = useState(0);
+  const [payTotalPages, setPayTotalPages] = useState(0);
   const [unitPrices, setUnitPrices] = useState<UnitPrice[]>([]);
   const [loading, setLoading] = useState(true);
   const [downloading, setDownloading] = useState(false);
@@ -53,7 +56,7 @@ const FarmerDetail = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const { isAuthenticated, isLoading } = useAuth();
-  const { pumpId, season, year } = usePumpContext();
+  const { pumpId, pumps, season, year, selectedSeason } = usePumpContext();
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) { navigate("/auth"); return; }
@@ -64,6 +67,49 @@ const FarmerDetail = () => {
     if (farmerId && pumpId && season && year) fetchData();
   }, [pumpId, season, year]);
 
+  const fetchPayments = async (page: number) => {
+    if (!farmerId) return;
+    try {
+      const result = await paymentApi.getByFarmerPaged(parseInt(farmerId!), page, PAY_PAGE_SIZE, selectedSeason?.id, selectedSeason?.id ? undefined : year);
+      setPayments(result.content);
+      setPayCurrentPage(result.number);
+      setPayTotalPages(result.totalPages);
+      setPayTotalElements(result.totalElements);
+    } catch { /* non-critical */ }
+  };
+
+  const fetchSeasonHistory = async (page: number, up?: UnitPrice[]) => {
+    if (!farmerId || !pumpId) return;
+    const prices = up ?? unitPrices;
+    try {
+      const result = await seasonApi.getFarmerHistory(parseInt(farmerId!), page, SEASON_PAGE_SIZE);
+      setSeasonHistoryPage(result.number);
+      setSeasonHistoryTotal(result.totalElements);
+      setSeasonHistoryTotalPages(result.totalPages);
+
+      const summaries: SeasonSummary[] = [];
+      for (const s of result.content) {
+        try {
+          const [asgn, detail] = await Promise.all([
+            assignmentApi.getByFarmer(parseInt(farmerId!), pumpId, s.id, s.year),
+            farmerApi.getDetail(parseInt(farmerId!), s.id, s.year).catch(() => null),
+          ]);
+          const totalLandShatak = asgn.reduce((acc, a) => acc + (a.assignedSizeShatak ?? a.landSizeShatak ?? 0), 0);
+          const up_match = prices.find(u => u.season === s.seasonName && u.year === s.year);
+          const pricePerShatak = up_match?.pricePerShatak ?? 0;
+          const calculatedCost = detail?.calculatedCost ?? totalLandShatak * pricePerShatak;
+          const totalPaid = detail?.totalPaid ?? 0;
+          const due = detail?.dueAmount ?? 0;
+          const advance = detail?.advanceAmount ?? 0;
+          summaries.push({ season: s, assignments: asgn, totalLandShatak, totalPaid, calculatedCost, due, advance });
+        } catch {
+          summaries.push({ season: s, assignments: [], totalLandShatak: 0, totalPaid: 0, calculatedCost: 0, due: 0, advance: 0 });
+        }
+      }
+      setSeasonSummaries(summaries);
+    } catch { /* non-critical */ }
+  };
+
   const fetchData = async () => {
     if (!pumpId || !farmerId) return;
     setLoading(true);
@@ -71,49 +117,27 @@ const FarmerDetail = () => {
       const [f, allS, p, up] = await Promise.all([
         farmerApi.getById(parseInt(farmerId!)),
         seasonApi.getActive(),
-        paymentApi.getByFarmer(parseInt(farmerId!)),
+        paymentApi.getByFarmerPaged(parseInt(farmerId!), 0, PAY_PAGE_SIZE, selectedSeason?.id, selectedSeason?.id ? undefined : year),
         unitPriceApi.getByPump(pumpId),
       ]);
       setFarmer(f);
       setAllSeasons(allS);
-      setPayments(p);
+      setPayments(p.content);
+      setPayCurrentPage(p.number);
+      setPayTotalPages(p.totalPages);
+      setPayTotalElements(p.totalElements);
       setUnitPrices(up);
 
-      // Fetch backend-calculated cost/due for the current season
-      const currentSeasonObj = allS.find(s => s.seasonName.toUpperCase() === season.toUpperCase() && s.year === year);
-      if (currentSeasonObj) {
+      // Fetch backend-calculated cost/due/advance for the selected season
+      if (selectedSeason?.id) {
         try {
-          const detail = await farmerApi.getDetail(parseInt(farmerId!), currentSeasonObj.id, year);
+          const detail = await farmerApi.getDetail(parseInt(farmerId!), selectedSeason.id, selectedSeason.year);
           setFarmerDetail(detail);
         } catch { /* detail is optional */ }
       }
 
-      // Build summaries for each season (show current + previous)
-      const summaries: SeasonSummary[] = [];
-      for (const s of allS.slice(0, 4)) {
-        try {
-          const asgn = await assignmentApi.getByFarmer(parseInt(farmerId!), pumpId, s.id, s.year);
-          if (asgn.length > 0) {
-            const totalLandShatak = asgn.reduce((acc, a) => {
-              const lb = a.assignedSizeBigha ?? a.landSizeBigha ?? 0;
-              const ls = a.assignedSizeShatak ?? a.landSizeShatak ?? 0;
-              return acc + lb * 33 + ls;
-            }, 0);
-            const totalLandBigha = totalLandShatak / 33;
-            const up_match = up.find(u => u.season === s.seasonName && u.year === s.year)
-              ?? up.find(u => u.isActive) ?? up[0];
-            const pricePerShatak = up_match?.pricePerShatak ?? 0;
-            const calculatedCost = totalLandShatak * pricePerShatak;
-            const totalPaid = p.filter(pay => pay.paymentType === "PAYMENT" || pay.paymentType === "ADJUSTMENT")
-              .reduce((acc, pay) => acc + pay.amount, 0);
-            const due = Math.max(0, calculatedCost - totalPaid);
-            const advance = calculatedCost < totalPaid ? totalPaid - calculatedCost : 0;
-            summaries.push({ season: s, assignments: asgn, totalLandBigha, totalLandShatak, totalPaid, calculatedCost, due, advance });
-          }
-        } catch { /* skip season if error */ }
-      }
-
-      setSeasonSummaries(summaries);
+      // Season history is loaded separately (paginated) — pass up directly to avoid stale closure
+      await fetchSeasonHistory(0, up);
     } catch (e: any) {
       toast({ title: "Error", description: e.message || "Failed to fetch", variant: "destructive" });
     } finally {
@@ -159,34 +183,59 @@ const FarmerDetail = () => {
     }
   };
 
+
   const handleDownloadInvoice = async () => {
-    if (!farmer) return;
+    const latestPayment = payments[0];
+    if (!latestPayment) {
+      toast({ title: "কোনো পেমেন্ট নেই", description: "ইনভয়েস তৈরির জন্য অন্তত একটি পেমেন্ট প্রয়োজন", variant: "destructive" });
+      return;
+    }
     setDownloading(true);
     try {
-      const blob = await reportsApi.downloadJasperInvoice(farmer.id, season, year);
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `invoice-${farmer.farmerCode}-${season}-${year}.pdf`;
-      document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
-      toast({ title: "Invoice downloaded" });
+      const fid = parseInt(farmerId!);
+      const [invoiceData, ledger] = await Promise.all([
+        invoiceApi.get(latestPayment.id),
+        ledgerApi.getLedger(fid),
+      ]);
+      const pumpBn = pumps.find((p) => p.id === pumpId)?.pumpNameBengali;
+      const selectedEntry = ledger.seasons.find((s) => s.seasonId === selectedSeason?.id);
+      const html = await buildReceiptHtml({
+        mode: "single",
+        invoiceNo: invoiceData.invoiceNo,
+        issuedAt: new Date().toISOString(),
+        pumpName: invoiceData.pump.name,
+        pumpNameBengali: pumpBn,
+        farmerName: farmer?.nameBengali ?? invoiceData.farmer.name,
+        farmerCode: invoiceData.farmer.identifier,
+        seasonName: selectedSeason?.seasonName ?? invoiceData.season.name ?? "",
+        year: selectedSeason?.year ?? invoiceData.season.year ?? new Date().getFullYear(),
+        payment: {
+          amount: invoiceData.payment.amount,
+          date: invoiceData.payment.paidAt,
+          method: invoiceData.payment.method,
+        },
+        lands: invoiceData.lands,
+        totalLandShatak: farmerDetail?.totalLandSizeShatak ?? undefined,
+        selectedSeasonTotal: selectedEntry?.billed ?? farmerDetail?.calculatedCost ?? 0,
+        selectedSeasonDue: selectedEntry?.outstanding ?? farmerDetail?.dueAmount ?? 0,
+        otherSeasonDues: ledger.seasons
+          .filter((s) => s.seasonId !== selectedSeason?.id && s.outstanding > 0)
+          .map((s) => ({ seasonName: s.seasonName, year: s.year, due: s.outstanding })),
+        farmerPortalUrl: `https://www.irripump.com/farmer?code=${invoiceData.farmer.identifier}`,
+      });
+      printReceiptHtml(html);
+      toast({ title: "প্রিন্ট হচ্ছে..." });
     } catch (e: any) {
-      toast({ title: "Error", description: e.message || "Failed to download invoice", variant: "destructive" });
+      toast({ title: "Error", description: e.message || "Failed to print invoice", variant: "destructive" });
     } finally {
       setDownloading(false);
     }
   };
 
-  const totalPaidAll = payments.filter(p => p.paymentType === "PAYMENT" || p.paymentType === "ADJUSTMENT")
-    .reduce((s, p) => s + p.amount, 0);
   const currentSummary = seasonSummaries.find(s => s.season.seasonName.toUpperCase() === season.toUpperCase() && s.season.year === year);
 
-  // Use backend-calculated values when available, fall back to client-side
   const backendCost = farmerDetail?.calculatedCost ?? currentSummary?.calculatedCost ?? 0;
-  const backendPaid = farmerDetail?.totalPaid ?? totalPaidAll;
+  const backendPaid = farmerDetail?.totalPaid ?? 0;
   const backendDue = farmerDetail?.dueAmount ?? currentSummary?.due ?? 0;
   const backendAdvance = farmerDetail?.advanceAmount ?? currentSummary?.advance ?? 0;
 
@@ -217,7 +266,8 @@ const FarmerDetail = () => {
             <CardContent className="pt-4">
               <p className="text-xs text-muted-foreground">বর্তমান মৌসুম</p>
               <p className="text-lg font-bold">{season}/{year}</p>
-              <p className="text-sm">{farmerDetail?.landCount != null ? `${farmerDetail.landCount} জমি` : currentSummary ? `${currentSummary.totalLandShatak.toFixed(0)} শতক` : "তথ্য নেই"}</p>
+              <p className="text-sm">{farmerDetail?.landCount != null ? `${farmerDetail.landCount} জমি` : currentSummary ? `${currentSummary.totalLandShatak.toFixed(2)} শতক` : "তথ্য নেই"}</p>
+              {currentSummary && <p className="text-xs text-muted-foreground">{(currentSummary.totalLandShatak/33).toFixed(3)} বিঘা</p>}
             </CardContent>
           </Card>
           <Card>
@@ -231,7 +281,7 @@ const FarmerDetail = () => {
             <CardContent className="pt-4">
               <p className="text-xs text-muted-foreground">মোট পরিশোধ</p>
               <p className="text-lg font-bold text-green-600">৳{backendPaid.toFixed(0)}</p>
-              <p className="text-xs text-muted-foreground">{payments.length} লেনদেন</p>
+              <p className="text-xs text-muted-foreground">{payTotalElements} লেনদেন</p>
             </CardContent>
           </Card>
           <Card>
@@ -283,31 +333,24 @@ const FarmerDetail = () => {
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead>জমি ID</TableHead>
                         <TableHead>দাগ নম্বর</TableHead>
-                        <TableHead>বিঘা</TableHead>
-                        <TableHead>শতক</TableHead>
-                        <TableHead>মোট (বিঘা)</TableHead>
+                        <TableHead>শতক / বিঘা</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {currentSummary.assignments.map(a => {
-                        const lb = a.assignedSizeBigha ?? a.landSizeBigha ?? 0;
                         const ls = a.assignedSizeShatak ?? a.landSizeShatak ?? 0;
                         return (
                           <TableRow key={a.id}>
-                            <TableCell className="font-mono">{a.landIdentificationNumber}</TableCell>
                             <TableCell>{a.landmarkNumber}</TableCell>
-                            <TableCell>{lb.toFixed(2)}</TableCell>
-                            <TableCell>{ls.toFixed(2)}</TableCell>
-                            <TableCell className="font-bold">{(lb + ls / 33).toFixed(3)}</TableCell>
+                            <TableCell className="font-bold">{ls.toFixed(2)} শতক<br/><span className="text-xs text-muted-foreground font-normal">{(ls/33).toFixed(3)} বিঘা</span></TableCell>
                           </TableRow>
                         );
                       })}
                     </TableBody>
                   </Table>
                   <div className="mt-4 grid grid-cols-2 md:grid-cols-4 gap-3 pt-4 border-t">
-                    <div><p className="text-xs text-muted-foreground">মোট জমি</p><p className="font-bold">{currentSummary.totalLandShatak.toFixed(0)} শতক</p></div>
+                    <div><p className="text-xs text-muted-foreground">মোট জমি</p><p className="font-bold">{currentSummary.totalLandShatak.toFixed(2)} শতক</p><p className="text-xs text-muted-foreground">{(currentSummary.totalLandShatak/33).toFixed(3)} বিঘা</p></div>
                     <div><p className="text-xs text-muted-foreground">খরচ (ব্যাকএন্ড)</p><p className="font-bold text-blue-600">৳{backendCost.toFixed(2)}</p></div>
                     <div><p className="text-xs text-muted-foreground">পরিশোধ</p><p className="font-bold text-green-600">৳{backendPaid.toFixed(2)}</p></div>
                     <div>
@@ -338,21 +381,36 @@ const FarmerDetail = () => {
                     <div className="flex items-center justify-between">
                       <CardTitle className="text-base">{ss.season.seasonNameBengali || ss.season.seasonName} — {ss.season.year}</CardTitle>
                       {ss.season.isCurrent && <Badge>বর্তমান</Badge>}
-                      {ss.due > 0
-                        ? <Badge variant="destructive">বকেয়া ৳{ss.due.toFixed(0)}</Badge>
-                        : <Badge variant="default" className="bg-green-600">পরিশোধিত</Badge>}
                     </div>
                   </CardHeader>
                   <CardContent>
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
-                      <div><p className="text-muted-foreground">জমি</p><p className="font-bold">{ss.assignments.length} পিস</p></div>
-                      <div><p className="text-muted-foreground">মোট শতক</p><p className="font-bold">{ss.totalLandShatak.toFixed(0)}</p></div>
+                      <div><p className="text-muted-foreground">জমি</p><p className="font-bold">{ss.assignments.length} পিস · {ss.totalLandShatak.toFixed(2)} শতক</p></div>
                       <div><p className="text-muted-foreground">খরচ</p><p className="font-bold text-blue-600">৳{ss.calculatedCost.toFixed(0)}</p></div>
                       <div><p className="text-muted-foreground">পরিশোধ</p><p className="font-bold text-green-600">৳{ss.totalPaid.toFixed(0)}</p></div>
+                      <div>
+                        <p className="text-muted-foreground">{ss.due > 0 ? "বকেয়া" : ss.advance > 0 ? "অগ্রিম" : "বকেয়া"}</p>
+                        <p className={`font-bold ${ss.due > 0 ? "text-red-600" : ss.advance > 0 ? "text-green-600" : "text-muted-foreground"}`}>
+                          {ss.due > 0 ? `৳${ss.due.toFixed(0)}` : ss.advance > 0 ? `৳${ss.advance.toFixed(0)}` : "—"}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="mt-2 flex justify-end">
+                      <Button size="sm" variant="outline"
+                        onClick={() => navigate(`/admin/farmers/${farmerId}/ledger`)}>
+                        লেজার
+                      </Button>
                     </div>
                   </CardContent>
                 </Card>
               ))}
+              <PaginationBar
+                currentPage={seasonHistoryPage}
+                totalPages={seasonHistoryTotalPages}
+                totalElements={seasonHistoryTotal}
+                pageSize={SEASON_PAGE_SIZE}
+                onPageChange={fetchSeasonHistory}
+              />
             </div>
           </TabsContent>
 
@@ -361,7 +419,7 @@ const FarmerDetail = () => {
             <Card>
               <CardHeader>
                 <div className="flex items-center justify-between">
-                  <CardTitle>পেমেন্ট ইতিহাস ({payments.length})</CardTitle>
+                  <CardTitle>পেমেন্ট ইতিহাস ({payTotalElements}টি)</CardTitle>
                   <Button size="sm" onClick={() => navigate(`/user/farmers/${farmerId}/payments`)}>
                     <CreditCard className="w-4 h-4 mr-1" />পরিচালনা
                   </Button>
@@ -392,6 +450,13 @@ const FarmerDetail = () => {
                         ))}
                       </TableBody>
                     </Table>
+                    <PaginationBar
+                      currentPage={payCurrentPage}
+                      totalPages={payTotalPages}
+                      totalElements={payTotalElements}
+                      pageSize={PAY_PAGE_SIZE}
+                      onPageChange={fetchPayments}
+                    />
                   </div>
                 )}
               </CardContent>

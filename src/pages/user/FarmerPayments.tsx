@@ -15,19 +15,20 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
-import { farmerApi, paymentApi, reportsApi } from "@/lib/api/client";
+import { usePumpContext } from "@/contexts/PumpContext";
+import { farmerApi, paymentApi, invoiceApi, ledgerApi } from "@/lib/api/client";
+import type { FarmerDetailResponse } from "@/lib/api/types";
+import { buildReceiptHtml, printReceiptHtml } from "@/lib/invoice/buildReceiptHtml";
 import type { Farmer, Payment } from "@/lib/api/types";
-import { Plus, Loader2, Download, Pencil, Trash2 } from "lucide-react";
+import { Plus, Loader2, Download, Pencil, Trash2, FileText } from "lucide-react";
 import AppNavbar from "@/components/AppNavbar";
 import PumpSelector from "@/components/PumpSelector";
+import PaginationBar from "@/components/PaginationBar";
+import { userNavItems } from "@/lib/navItems";
 
-const userNavItems = [
-  { label: "ড্যাশবোর্ড", path: "/user/dashboard" },
-  { label: "কৃষক", path: "/user/farmers" },
-  { label: "মৌসুম", path: "/user/seasons" },
-  { label: "জমি", path: "/user/lands" },
-  { label: "ইউনিট মূল্য", path: "/user/unit-prices" },
-];
+const PAGE_SIZE = 10;
+
+
 
 const schema = z.object({
   amount: z.number().min(1),
@@ -41,10 +42,15 @@ type FormData = z.infer<typeof schema>;
 const FarmerPayments = () => {
   const { farmerId } = useParams<{ farmerId: string }>();
   const [farmer, setFarmer] = useState<Farmer | null>(null);
+  const [farmerDetail, setFarmerDetail] = useState<FarmerDetailResponse | null>(null);
   const [payments, setPayments] = useState<Payment[]>([]);
   const [loading, setLoading] = useState(true);
+  const [currentPage, setCurrentPage] = useState(0);
+  const [totalPages, setTotalPages] = useState(0);
+  const [totalElements, setTotalElements] = useState(0);
   const [submitting, setSubmitting] = useState(false);
-  const [downloading, setDownloading] = useState(false);
+  const [downloadingId, setDownloadingId] = useState<number | null>(null);
+  const [downloadingList, setDownloadingList] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<{ id: number; amount: number; reason: string } | null>(null);
   const [deleting, setDeleting] = useState<Payment | null>(null);
@@ -52,22 +58,38 @@ const FarmerPayments = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const { isAuthenticated, isLoading } = useAuth();
+  const { selectedSeason, year, pumpId, pumps } = usePumpContext();
 
   const form = useForm<FormData>({
     resolver: zodResolver(schema),
-    defaultValues: { amount: 0, paymentDate: new Date().toISOString().split("T")[0], paymentMethod: "CASH" as const, paymentType: "PAYMENT" as const, transactionReference: "" },
+    defaultValues: { amount: undefined, paymentDate: new Date().toISOString().split("T")[0], paymentMethod: "CASH" as const, paymentType: "PAYMENT" as const, transactionReference: "" },
   });
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) { navigate("/auth"); return; }
-    if (!isLoading && isAuthenticated && farmerId) fetchData();
-  }, [isLoading, isAuthenticated, farmerId, navigate]);
+    if (!isLoading && isAuthenticated && farmerId) fetchData(0);
+  }, [isLoading, isAuthenticated, farmerId, navigate, selectedSeason?.id]);
 
-  const fetchData = async () => {
+  const fetchData = async (page: number, farmerObj?: Farmer) => {
     setLoading(true);
     try {
-      const [f, p] = await Promise.all([farmerApi.getById(parseInt(farmerId!)), paymentApi.getByFarmer(parseInt(farmerId!))]);
-      setFarmer(f); setPayments(p);
+      const id = parseInt(farmerId!);
+      let f = farmerObj ?? farmer;
+      if (!f) {
+        f = await farmerApi.getById(id);
+        setFarmer(f);
+      }
+      const [result, detail] = await Promise.all([
+        paymentApi.getByFarmerPaged(id, page, PAGE_SIZE, selectedSeason?.id, selectedSeason?.id ? undefined : year),
+        selectedSeason?.id
+          ? farmerApi.getDetail(id, selectedSeason.id, selectedSeason.year).catch(() => null)
+          : Promise.resolve(null),
+      ]);
+      setPayments(result.content);
+      setCurrentPage(result.number);
+      setTotalPages(result.totalPages);
+      setTotalElements(result.totalElements);
+      setFarmerDetail(detail);
     } catch { toast({ title: "Error", variant: "destructive" }); }
     finally { setLoading(false); }
   };
@@ -75,9 +97,9 @@ const FarmerPayments = () => {
   const onSubmit = async (data: FormData) => {
     setSubmitting(true);
     try {
-      await paymentApi.create(parseInt(farmerId!), { ...(data as Required<FormData>), transactionReference: data.transactionReference || undefined });
+      await paymentApi.create(parseInt(farmerId!), { ...(data as Required<FormData>), transactionReference: data.transactionReference || undefined }, selectedSeason?.id);
       toast({ title: "পেমেন্ট রেকর্ড হয়েছে" });
-      form.reset(); setShowForm(false); fetchData();
+      form.reset(); setShowForm(false); fetchData(0);
     } catch (e: any) { toast({ title: "Error", description: e.message, variant: "destructive" }); }
     finally { setSubmitting(false); }
   };
@@ -88,7 +110,7 @@ const FarmerPayments = () => {
     try {
       await paymentApi.update(editing.id, { amount: editing.amount, reason: editing.reason });
       toast({ title: "আপডেট সফল" });
-      setEditing(null); fetchData();
+      setEditing(null); fetchData(currentPage);
     } catch (e: any) { toast({ title: "Error", description: e.message, variant: "destructive" }); }
     finally { setBusy(false); }
   };
@@ -99,23 +121,92 @@ const FarmerPayments = () => {
     try {
       await paymentApi.delete(deleting.id);
       toast({ title: "মুছে ফেলা হয়েছে" });
-      setDeleting(null); fetchData();
+      setDeleting(null); fetchData(currentPage);
     } catch (e: any) { toast({ title: "Error", description: e.message, variant: "destructive" }); }
     finally { setBusy(false); }
   };
 
-  const handleDownloadInvoice = async () => {
-    setDownloading(true);
+  const handleDownloadInvoice = async (payment: Payment) => {
+    setDownloadingId(payment.id);
     try {
-      const blob = await reportsApi.downloadInvoice(parseInt(farmerId!));
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url; a.download = `invoice-${farmer?.farmerCode || farmerId}.pdf`;
-      document.body.appendChild(a); a.click();
-      window.URL.revokeObjectURL(url); document.body.removeChild(a);
-      toast({ title: "Invoice downloaded" });
-    } catch { toast({ title: "Error", description: "Failed to download invoice", variant: "destructive" }); }
-    finally { setDownloading(false); }
+      const id = parseInt(farmerId!);
+      const [invoiceData, ledger] = await Promise.all([
+        invoiceApi.get(payment.id),
+        ledgerApi.getLedger(id),
+      ]);
+      const pumpBn = pumps.find((p) => p.id === pumpId)?.pumpNameBengali;
+      const selectedEntry = ledger.seasons.find((s) => s.seasonId === selectedSeason?.id);
+      const html = await buildReceiptHtml({
+        mode: "single",
+        invoiceNo: invoiceData.invoiceNo,
+        issuedAt: new Date().toISOString(),
+        pumpName: invoiceData.pump.name,
+        pumpNameBengali: pumpBn,
+        farmerName: farmer?.nameBengali ?? invoiceData.farmer.name,
+        farmerCode: invoiceData.farmer.identifier,
+        seasonName: selectedSeason?.seasonName ?? invoiceData.season.name ?? "",
+        year: selectedSeason?.year ?? invoiceData.season.year ?? new Date().getFullYear(),
+        payment: {
+          amount: invoiceData.payment.amount,
+          date: invoiceData.payment.paidAt,
+          method: invoiceData.payment.method,
+        },
+        lands: invoiceData.lands,
+        totalLandShatak: farmerDetail?.totalLandSizeShatak ?? undefined,
+        selectedSeasonTotal: selectedEntry?.billed ?? farmerDetail?.calculatedCost ?? 0,
+        selectedSeasonDue: selectedEntry?.outstanding ?? farmerDetail?.dueAmount ?? 0,
+        otherSeasonDues: ledger.seasons
+          .filter((s) => s.seasonId !== selectedSeason?.id && s.outstanding > 0)
+          .map((s) => ({ seasonName: s.seasonName, year: s.year, due: s.outstanding })),
+        farmerPortalUrl: `https://www.irripump.com/farmer?code=${invoiceData.farmer.identifier}`,
+      });
+      printReceiptHtml(html);
+      toast({ title: "প্রিন্ট হচ্ছে..." });
+    } catch (e: any) {
+      toast({ title: "Error", description: e.message || "Failed to print invoice", variant: "destructive" });
+    } finally {
+      setDownloadingId(null);
+    }
+  };
+
+  const handleDownloadPaymentList = async () => {
+    if (!farmer) return;
+    setDownloadingList(true);
+    try {
+      const id = parseInt(farmerId!);
+      const all = await paymentApi.getByFarmerPaged(id, 0, 1000, selectedSeason?.id, selectedSeason?.id ? undefined : year);
+      const pumpBn = pumps.find((p) => p.id === pumpId)?.pumpNameBengali;
+      const stmtDate = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+      const statementNo = `STMT-${farmer.farmerCode}-${selectedSeason?.seasonName ?? "ALL"}-${stmtDate}`;
+      const due = farmerDetail?.dueAmount ?? 0;
+      const html = await buildReceiptHtml({
+        mode: "list",
+        statementNo,
+        issuedAt: new Date().toISOString(),
+        pumpName: farmer.pumpName ?? pumps.find((p) => p.id === pumpId)?.pumpNameEnglish ?? "",
+        pumpNameBengali: pumpBn,
+        farmerName: farmer.nameBengali,
+        farmerCode: farmer.farmerCode,
+        seasonName: selectedSeason?.seasonName ?? "",
+        year: selectedSeason?.year ?? year,
+        payments: all.content.map((p) => ({
+          date: p.paymentDate,
+          amount: p.amount,
+          method: p.paymentMethod,
+          reference: p.transactionReference,
+          isReversed: p.isReversed,
+        })),
+        selectedSeasonTotal: farmerDetail?.calculatedCost ?? 0,
+        selectedSeasonDue: due > 0 ? due : -(farmerDetail?.advanceAmount ?? 0),
+        farmerPortalUrl: `https://www.irripump.com/farmer?code=${farmer.farmerCode}`,
+      });
+      printReceiptHtml(html);
+      toast({ title: "প্রিন্ট হচ্ছে..." });
+    } catch (e: any) {
+      toast({ title: "Error", description: e.message, variant: "destructive" });
+    } finally {
+      setDownloadingList(false);
+    }
   };
 
   const methodLabel: Record<string, string> = { CASH: "নগদ", BANK: "ব্যাংক", MOBILE_BANKING: "মোবাইল ব্যাংকিং" };
@@ -135,9 +226,6 @@ const FarmerPayments = () => {
         rightContent={
           <div className="flex flex-wrap gap-2 items-center">
             <PumpSelector />
-            <Button size="sm" variant="outline" onClick={handleDownloadInvoice} disabled={downloading}>
-              {downloading ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <Download className="w-4 h-4 mr-1" />}ইনভয়েস
-            </Button>
             <Button size="sm" onClick={() => setShowForm(!showForm)}><Plus className="w-4 h-4 mr-1" />পেমেন্ট</Button>
           </div>
         }
@@ -151,7 +239,7 @@ const FarmerPayments = () => {
               <Form {...form}>
                 <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <FormField control={form.control} name="amount" render={({ field }) => (<FormItem><FormLabel>পরিমাণ (৳)</FormLabel><FormControl><Input type="number" {...field} onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)} /></FormControl><FormMessage /></FormItem>)} />
+                    <FormField control={form.control} name="amount" render={({ field }) => (<FormItem><FormLabel>পরিমাণ (৳)</FormLabel><FormControl><Input type="number" {...field} onChange={(e) => field.onChange(e.target.value === "" ? undefined : parseFloat(e.target.value))} /></FormControl><FormMessage /></FormItem>)} />
                     <FormField control={form.control} name="paymentDate" render={({ field }) => (<FormItem><FormLabel>তারিখ</FormLabel><FormControl><Input type="date" {...field} /></FormControl><FormMessage /></FormItem>)} />
                     <FormField control={form.control} name="paymentMethod" render={({ field }) => (<FormItem><FormLabel>পদ্ধতি</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl><SelectContent><SelectItem value="CASH">নগদ</SelectItem><SelectItem value="BANK">ব্যাংক</SelectItem><SelectItem value="MOBILE_BANKING">মোবাইল ব্যাংকিং</SelectItem></SelectContent></Select><FormMessage /></FormItem>)} />
                   </div>
@@ -170,7 +258,15 @@ const FarmerPayments = () => {
         )}
 
         <Card>
-          <CardHeader><CardTitle>পেমেন্ট ইতিহাস ({payments.length})</CardTitle></CardHeader>
+          <CardHeader>
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <CardTitle>পেমেন্ট ইতিহাস ({totalElements}টি)</CardTitle>
+              <Button variant="outline" size="sm" onClick={handleDownloadPaymentList} disabled={downloadingList || payments.length === 0}>
+                {downloadingList ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <FileText className="w-4 h-4 mr-2" />}
+                পেমেন্ট তালিকা
+              </Button>
+            </div>
+          </CardHeader>
           <CardContent>
             {payments.length === 0 ? (
               <div className="text-center py-8 text-muted-foreground">কোনো পেমেন্ট নেই।</div>
@@ -197,6 +293,9 @@ const FarmerPayments = () => {
                         <TableCell className="hidden md:table-cell font-mono text-xs">{p.transactionReference || "-"}</TableCell>
                         <TableCell>
                           <div className="flex gap-1">
+                            <Button size="icon" variant="outline" className="h-8 w-8" title="ইনভয়েস" onClick={() => handleDownloadInvoice(p)} disabled={downloadingId === p.id}>
+                              {downloadingId === p.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
+                            </Button>
                             <Button size="icon" variant="outline" className="h-8 w-8" onClick={() => setEditing({ id: p.id, amount: p.amount, reason: "" })}><Pencil className="w-3.5 h-3.5" /></Button>
                             <Button size="icon" variant="outline" className="h-8 w-8 text-destructive" onClick={() => setDeleting(p)}><Trash2 className="w-3.5 h-3.5" /></Button>
                           </div>
@@ -205,6 +304,13 @@ const FarmerPayments = () => {
                     ))}
                   </TableBody>
                 </Table>
+                <PaginationBar
+                  currentPage={currentPage}
+                  totalPages={totalPages}
+                  totalElements={totalElements}
+                  pageSize={PAGE_SIZE}
+                  onPageChange={fetchData}
+                />
               </div>
             )}
           </CardContent>
@@ -216,7 +322,7 @@ const FarmerPayments = () => {
           <DialogHeader><DialogTitle>পেমেন্ট সংশোধন</DialogTitle></DialogHeader>
           {editing && (
             <div className="space-y-3">
-              <div><Label>পরিমাণ</Label><Input type="number" value={editing.amount} onChange={(e) => setEditing({ ...editing, amount: parseFloat(e.target.value) || 0 })} /></div>
+              <div><Label>পরিমাণ</Label><Input type="number" value={editing.amount} onChange={(e) => setEditing({ ...editing, amount: e.target.value === "" ? undefined : parseFloat(e.target.value) })} /></div>
               <div><Label>কারণ (Reason)</Label><Input value={editing.reason} onChange={(e) => setEditing({ ...editing, reason: e.target.value })} placeholder="সংশোধনের কারণ লিখুন" /></div>
             </div>
           )}

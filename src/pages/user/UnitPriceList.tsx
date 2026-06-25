@@ -20,13 +20,9 @@ import type { UnitPrice } from "@/lib/api/types";
 import { Plus, Loader2, Pencil, Trash2 } from "lucide-react";
 import AppNavbar from "@/components/AppNavbar";
 import PumpSelector from "@/components/PumpSelector";
+import { userNavItems } from "@/lib/navItems";
 
-const userNavItems = [
-  { label: "ড্যাশবোর্ড", path: "/user/dashboard" },
-  { label: "কৃষক", path: "/user/farmers" },
-  { label: "মৌসুম", path: "/user/seasons" },
-  { label: "ইউনিট মূল্য", path: "/user/unit-prices" },
-];
+
 
 const schema = z.object({
   pricePerShatak: z.number().min(1, "Price must be > 0"),
@@ -154,7 +150,7 @@ const UnitPriceList = () => {
                       <FormItem>
                         <FormLabel>মূল্য / শতক (৳)</FormLabel>
                         <FormControl>
-                          <Input type="number" {...field} onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)} />
+                          <Input type="number" {...field} onChange={(e) => field.onChange(e.target.value === "" ? undefined : parseFloat(e.target.value))} />
                         </FormControl>
                         {field.value > 0 && <p className="text-xs text-muted-foreground">= ৳{(field.value * 33).toLocaleString()}/বিঘা</p>}
                         <FormMessage />
@@ -230,7 +226,7 @@ const UnitPriceList = () => {
             <div className="space-y-3">
               <div>
                 <Label>মূল্য / শতক</Label>
-                <Input type="number" value={editing.pricePerShatak} onChange={(e) => setEditing({ ...editing, pricePerShatak: parseFloat(e.target.value) || 0 })} />
+                <Input type="number" value={editing.pricePerShatak} onChange={(e) => setEditing({ ...editing, pricePerShatak: e.target.value === "" ? undefined : parseFloat(e.target.value) })} />
                 {editing.pricePerShatak > 0 && <p className="text-xs text-muted-foreground mt-1">= ৳{(editing.pricePerShatak * 33).toLocaleString()}/বিঘা</p>}
               </div>
               <div><Label>কার্যকর শুরু</Label><Input type="date" value={editing.effectiveFrom} onChange={(e) => setEditing({ ...editing, effectiveFrom: e.target.value })} /></div>

@@ -9,12 +9,13 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { usePumpContext } from "@/contexts/PumpContext";
-import { pumpApi } from "@/lib/api/client";
-import type { Pump } from "@/lib/api/types";
-import { Plus, RefreshCw, Pencil, Trash2, Loader2 } from "lucide-react";
+import { pumpApi, userApi } from "@/lib/api/client";
+import type { Pump, User } from "@/lib/api/types";
+import { Plus, RefreshCw, Pencil, Trash2, Loader2, UserCog } from "lucide-react";
 import AppNavbar from "@/components/AppNavbar";
 import PumpSelector from "@/components/PumpSelector";
 
@@ -23,14 +24,20 @@ const adminNavItems = [
   { label: "পাম্প", path: "/admin/pumps" },
   { label: "ব্যবহারকারী", path: "/admin/users" },
   { label: "কৃষক", path: "/admin/farmers" },
-  { label: "সেটিংস", path: "/admin/settings" },
+  { label: "মৌসুম", path: "/admin/seasons" },
+  { label: "অডিট লগ", path: "/admin/audit-log" },
 ];
 
 const PumpList = () => {
   const [pumps, setPumps] = useState<Pump[]>([]);
+  const [operators, setOperators] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState<Pump | null>(null);
   const [deleting, setDeleting] = useState<Pump | null>(null);
+  const [reassigning, setReassigning] = useState<Pump | null>(null);
+  const [selectedOperatorId, setSelectedOperatorId] = useState("");
+  const [hardDeleting, setHardDeleting] = useState<Pump | null>(null);
+  const [hardDeleteReason, setHardDeleteReason] = useState("");
   const [busy, setBusy] = useState(false);
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -43,7 +50,7 @@ const PumpList = () => {
       toast({ title: "Access Denied", variant: "destructive" });
       navigate("/auth"); return;
     }
-    if (!isLoading && isAuthenticated) fetchPumps();
+    if (!isLoading && isAuthenticated) { fetchPumps(); fetchOperators(); }
   }, [isLoading, isAuthenticated, user, navigate, toast]);
 
   const fetchPumps = async () => {
@@ -53,6 +60,35 @@ const PumpList = () => {
       setPumps(data);
     } catch { toast({ title: "Error", description: "Failed to fetch pumps", variant: "destructive" }); }
     finally { setLoading(false); }
+  };
+
+  const fetchOperators = async () => {
+    try { setOperators(await userApi.getAll()); } catch { /* ignore */ }
+  };
+
+  const handleReassign = async () => {
+    if (!reassigning || !selectedOperatorId) return;
+    setBusy(true);
+    try {
+      await pumpApi.reassign(reassigning.id, Number(selectedOperatorId));
+      toast({ title: "পুনর্বরাদ্দ সফল" });
+      setReassigning(null); setSelectedOperatorId("");
+      await fetchPumps();
+    } catch (e: any) { toast({ title: "Error", description: e.message, variant: "destructive" }); }
+    finally { setBusy(false); }
+  };
+
+  const handleHardDelete = async () => {
+    if (!hardDeleting || !hardDeleteReason.trim()) return;
+    setBusy(true);
+    try {
+      await pumpApi.hardDelete(hardDeleting.id, hardDeleteReason.trim());
+      toast({ title: "স্থায়ীভাবে মুছে ফেলা হয়েছে" });
+      setHardDeleting(null); setHardDeleteReason("");
+      await fetchPumps();
+      await refreshPumps();
+    } catch (e: any) { toast({ title: "Error", description: e.message, variant: "destructive" }); }
+    finally { setBusy(false); }
   };
 
   const handleUpdate = async () => {
@@ -65,6 +101,7 @@ const PumpList = () => {
         location: editing.location,
         installationDate: editing.installationDate,
         status: editing.status,
+        farmerCodePrefix: editing.farmerCodePrefix,
       });
       toast({ title: "আপডেট সফল" });
       setEditing(null);
@@ -146,8 +183,10 @@ const PumpList = () => {
                         <TableCell>{getStatusBadge(pump.status)}</TableCell>
                         <TableCell>
                           <div className="flex gap-1">
-                            <Button size="icon" variant="outline" className="h-8 w-8" onClick={() => setEditing({ ...pump })}><Pencil className="w-3.5 h-3.5" /></Button>
-                            <Button size="icon" variant="outline" className="h-8 w-8 text-destructive" onClick={() => setDeleting(pump)}><Trash2 className="w-3.5 h-3.5" /></Button>
+                            <Button size="icon" variant="outline" className="h-8 w-8" title="সম্পাদনা" onClick={() => setEditing({ ...pump })}><Pencil className="w-3.5 h-3.5" /></Button>
+                            <Button size="icon" variant="outline" className="h-8 w-8" title="অপারেটর পুনর্বরাদ্দ" onClick={() => { setReassigning(pump); setSelectedOperatorId(""); }}><UserCog className="w-3.5 h-3.5" /></Button>
+                            <Button size="icon" variant="outline" className="h-8 w-8 text-destructive" title="আর্কাইভ (সফট ডিলিট)" onClick={() => setDeleting(pump)}><Trash2 className="w-3.5 h-3.5" /></Button>
+                            <Button size="sm" variant="destructive" className="h-8 text-xs" title="স্থায়ীভাবে মুছুন" onClick={() => { setHardDeleting(pump); setHardDeleteReason(""); }}>Hard Delete</Button>
                           </div>
                         </TableCell>
                       </TableRow>
@@ -169,6 +208,16 @@ const PumpList = () => {
               <div><Label>Name (English)</Label><Input value={editing.pumpNameEnglish} onChange={(e) => setEditing({ ...editing, pumpNameEnglish: e.target.value })} /></div>
               <div><Label>Location</Label><Input value={editing.location} onChange={(e) => setEditing({ ...editing, location: e.target.value })} /></div>
               <div><Label>Installation Date</Label><Input type="date" value={editing.installationDate} onChange={(e) => setEditing({ ...editing, installationDate: e.target.value })} /></div>
+              <div>
+                <Label>কৃষক কোড প্রিফিক্স (Farmer Code Prefix)</Label>
+                <Input
+                  value={editing.farmerCodePrefix ?? ""}
+                  maxLength={10}
+                  onChange={(e) => setEditing({ ...editing, farmerCodePrefix: e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "") })}
+                  placeholder="e.g., BK, F"
+                />
+                <p className="text-xs text-muted-foreground mt-1">উদাহরণ: BK → BK00123</p>
+              </div>
               <div>
                 <Label>Status</Label>
                 <Select value={editing.status} onValueChange={(v: any) => setEditing({ ...editing, status: v })}>
@@ -201,6 +250,49 @@ const PumpList = () => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <Dialog open={!!reassigning} onOpenChange={(o) => !o && setReassigning(null)}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>অপারেটর পুনর্বরাদ্দ</DialogTitle></DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            "{reassigning?.pumpNameBengali}" একজন নতুন অপারেটরকে বরাদ্দ করা হবে। বিদ্যমান বরাদ্দ নিষ্ক্রিয় হবে। পাম্পের সব ইতিহাস (কৃষক, মৌসুম, দেনা) পাম্পের সাথেই থাকবে।
+          </p>
+          <div>
+            <Label>নতুন অপারেটর</Label>
+            <Select value={selectedOperatorId} onValueChange={setSelectedOperatorId}>
+              <SelectTrigger><SelectValue placeholder="অপারেটর বেছে নিন" /></SelectTrigger>
+              <SelectContent>
+                {operators.map((op) => (
+                  <SelectItem key={op.id} value={String(op.id)}>{op.fullName} ({op.username})</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setReassigning(null)}>বাতিল</Button>
+            <Button onClick={handleReassign} disabled={busy || !selectedOperatorId}>{busy && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}পুনর্বরাদ্দ করুন</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!hardDeleting} onOpenChange={(o) => { if (!o) { setHardDeleting(null); setHardDeleteReason(""); } }}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>পাম্প স্থায়ীভাবে মুছুন</DialogTitle></DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            "{hardDeleting?.pumpNameBengali}" এবং এর সব কৃষক, মৌসুম, দেনা ও পেমেন্ট স্থায়ীভাবে মুছে যাবে। এই কাজ অপরিবর্তনীয়। সাধারণ আর্কাইভের জন্য উপরের ট্র্যাশ আইকন ব্যবহার করুন।
+          </p>
+          <div>
+            <Label>কারণ (বাধ্যতামূলক)</Label>
+            <Textarea value={hardDeleteReason} onChange={(e) => setHardDeleteReason(e.target.value)} placeholder="হার্ড ডিলিটের কারণ লিখুন..." />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setHardDeleting(null); setHardDeleteReason(""); }}>বাতিল</Button>
+            <Button variant="destructive" onClick={handleHardDelete} disabled={busy || !hardDeleteReason.trim()}>
+              {busy && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}স্থায়ীভাবে মুছুন
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

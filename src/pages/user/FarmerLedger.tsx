@@ -9,18 +9,9 @@ import { ledgerApi } from "@/lib/api/client";
 import type { LedgerResponse, SeasonLedger } from "@/lib/api/types";
 import { ArrowLeft, TrendingDown, TrendingUp, Wallet } from "lucide-react";
 import AppNavbar from "@/components/AppNavbar";
+import { userNavItems } from "@/lib/navItems";
 
-const userNavItems = [
-  { label: "ড্যাশবোর্ড", path: "/user/dashboard" },
-  { label: "কৃষক", path: "/user/farmers" },
-  { label: "মৌসুম", path: "/user/seasons" },
-];
 
-const KIND_LABEL: Record<string, string> = {
-  BORO: "বোরো",
-  AMAN: "আমন",
-  AUS: "আউশ",
-};
 
 const FarmerLedger = () => {
   const { farmerId } = useParams<{ farmerId: string }>();
@@ -137,8 +128,7 @@ function SeasonLedgerCard({ sl }: { sl: SeasonLedger }) {
       <CardHeader className="pb-2">
         <div className="flex items-center justify-between flex-wrap gap-2">
           <CardTitle className="text-base flex items-center gap-2">
-            {KIND_LABEL[sl.seasonKind ?? ""] ?? sl.seasonName} — {sl.year}
-            {sl.seasonKind && <Badge variant="outline" className="text-xs">{sl.seasonKind}</Badge>}
+            {sl.seasonName} — {sl.year}
           </CardTitle>
           <Badge variant={isPaid ? "default" : "destructive"}>
             {isPaid ? "পরিশোধিত" : `৳${sl.outstanding.toFixed(0)} বকেয়া`}
