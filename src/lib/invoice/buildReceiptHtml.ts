@@ -30,6 +30,7 @@ export interface LandInfo {
   landmarkNumber: string;
   area: string;
   tag?: string;
+  sizeShatak?: number;
 }
 
 export interface SinglePaymentInfo {
@@ -157,10 +158,11 @@ ${farmerBlock}
           return `<tr><td>${l.landmarkNumber}${tag}</td><td class="right">${l.area}</td></tr>`;
         })
         .join("");
-      const totalLine =
-        data.totalLandShatak != null
-          ? `<div class="total-line">মোট: ${data.totalLandShatak.toFixed(2)} শতক (${(data.totalLandShatak / 33).toFixed(3)} বিঘা)</div>`
-          : "";
+      const computedTotal = data.lands.reduce((s, l) => s + (l.sizeShatak ?? 0), 0);
+      const shatak = data.totalLandShatak ?? (computedTotal > 0 ? computedTotal : null);
+      const totalLine = shatak != null
+        ? `<div class="total-line">মোট: ${shatak.toFixed(2)} শতক (${(shatak / 33).toFixed(3)} বিঘা)</div>`
+        : "";
       contentHtml += `
 <div class="section-label">জমির তথ্য</div>
 <table>

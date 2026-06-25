@@ -493,7 +493,7 @@ export interface InvoiceResponse {
   operator: { name: string };
   season: { name?: string; type?: string; year?: number };
   farmer: { name: string; identifier: string };
-  lands: { landmarkNumber: string; area: string; tag?: string }[];
+  lands: { landmarkNumber: string; area: string; tag?: string; sizeShatak?: number }[];
   payment: { amount: number; paidAt: string; method: string };
   allocations: { seasonName: string; dueDate: string; applied: number; remainingAfter: number }[];
   balances: { totalDue: number; totalPaid: number; outstanding: number; creditBalance: number };
