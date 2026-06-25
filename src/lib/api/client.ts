@@ -1,9 +1,9 @@
 import type {
   AuthResponse, User, Pump, Farmer, Land, UnitPrice, Payment, DashboardStats,
-  Setting, FarmerPortalData, LoginRequest, RefreshTokenRequest, CreateUserRequest,
+  FarmerPortalData, LoginRequest, RefreshTokenRequest, CreateUserRequest,
   UpdateUserRequest, CreatePumpRequest, CreateFarmerRequest, CreateLandRequest, UpdateLandRequest,
   CreateUnitPriceRequest, UpdateUnitPriceRequest, CreatePaymentRequest, UpdatePaymentRequest,
-  VerifyFarmerCodeRequest, CreateSettingRequest, FarmerLandAssignment, Season,
+  VerifyFarmerCodeRequest, FarmerLandAssignment, Season,
   AssignLandRequest, FarmerSummaryResponse, FarmerDetailResponse, CreateSeasonRequest,
   SeasonEnrollmentResponse, SeasonDashboard, LedgerResponse,
   AdminDashboardGroupBy, AdminDashboardResponse, AdjustDueRequest, ReasonRequest,
@@ -168,8 +168,6 @@ export const adminApi = {
     if (query) params.append("query", query);
     return apiRequest<PageResponse<Farmer>>(`/admin/farmers/paged?${params}`);
   },
-  updateCodePrefix: async (pumpId: number, prefix: string): Promise<Pump> =>
-    apiRequest<Pump>(`/admin/pumps/${pumpId}/code-prefix`, { method: "PATCH", body: JSON.stringify({ prefix }) }),
 };
 
 // Pump API
@@ -474,17 +472,6 @@ export const invoiceApi = {
     apiRequest<InvoiceResponse>(`/invoices/${paymentId}`),
 };
 
-// Settings API
-export const settingsApi = {
-  save: async (pumpId: number, data: CreateSettingRequest): Promise<Setting> =>
-    apiRequest<Setting>(`/settings/pump/${pumpId}`, { method: "POST", body: JSON.stringify(data) }),
-  getAll: async (pumpId: number): Promise<Setting[]> =>
-    apiRequest<Setting[]>(`/settings/pump/${pumpId}`),
-  get: async (pumpId: number, key: string): Promise<string> =>
-    apiRequest<string>(`/settings/pump/${pumpId}/${key}`),
-  delete: async (id: number): Promise<void> =>
-    apiRequest<void>(`/settings/${id}`, { method: "DELETE" }),
-};
 
 // Farmer Portal API
 export const farmerPortalApi = {

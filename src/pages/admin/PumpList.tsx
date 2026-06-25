@@ -26,7 +26,6 @@ const adminNavItems = [
   { label: "কৃষক", path: "/admin/farmers" },
   { label: "মৌসুম", path: "/admin/seasons" },
   { label: "অডিট লগ", path: "/admin/audit-log" },
-  { label: "সেটিংস", path: "/admin/settings" },
 ];
 
 const PumpList = () => {
@@ -102,6 +101,7 @@ const PumpList = () => {
         location: editing.location,
         installationDate: editing.installationDate,
         status: editing.status,
+        farmerCodePrefix: editing.farmerCodePrefix,
       });
       toast({ title: "আপডেট সফল" });
       setEditing(null);
@@ -208,6 +208,16 @@ const PumpList = () => {
               <div><Label>Name (English)</Label><Input value={editing.pumpNameEnglish} onChange={(e) => setEditing({ ...editing, pumpNameEnglish: e.target.value })} /></div>
               <div><Label>Location</Label><Input value={editing.location} onChange={(e) => setEditing({ ...editing, location: e.target.value })} /></div>
               <div><Label>Installation Date</Label><Input type="date" value={editing.installationDate} onChange={(e) => setEditing({ ...editing, installationDate: e.target.value })} /></div>
+              <div>
+                <Label>কৃষক কোড প্রিফিক্স (Farmer Code Prefix)</Label>
+                <Input
+                  value={editing.farmerCodePrefix ?? ""}
+                  maxLength={10}
+                  onChange={(e) => setEditing({ ...editing, farmerCodePrefix: e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "") })}
+                  placeholder="e.g., BK, F"
+                />
+                <p className="text-xs text-muted-foreground mt-1">উদাহরণ: BK → BK00123</p>
+              </div>
               <div>
                 <Label>Status</Label>
                 <Select value={editing.status} onValueChange={(v: any) => setEditing({ ...editing, status: v })}>

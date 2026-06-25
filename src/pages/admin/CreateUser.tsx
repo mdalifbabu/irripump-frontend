@@ -29,7 +29,6 @@ const adminNavItems = [
   { label: "কৃষক", path: "/admin/farmers" },
   { label: "মৌসুম", path: "/admin/seasons" },
   { label: "অডিট লগ", path: "/admin/audit-log" },
-  { label: "সেটিংস", path: "/admin/settings" },
 ];
 
 const createUserSchema = z.object({

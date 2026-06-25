@@ -8,10 +8,9 @@ import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { usePumpContext } from "@/contexts/PumpContext";
-import { paymentApi, invoiceApi } from "@/lib/api/client";
+import { paymentApi, invoiceApi, ledgerApi } from "@/lib/api/client";
 import type { PaymentResponse } from "@/lib/api/types";
-import { buildInvoicePdf } from "@/lib/invoice/buildInvoicePdf";
-import { buildPaymentListPdf } from "@/lib/invoice/buildPaymentListPdf";
+import { buildReceiptHtml, printReceiptHtml } from "@/lib/invoice/buildReceiptHtml";
 import AppNavbar from "@/components/AppNavbar";
 import PumpSelector from "@/components/PumpSelector";
 import PaginationBar from "@/components/PaginationBar";
@@ -90,34 +89,68 @@ const PaymentList = () => {
   const handleDownloadInvoice = async (payment: PaymentResponse) => {
     setDownloadingId(payment.id);
     try {
-      const data = await invoiceApi.get(payment.id);
-      buildInvoicePdf(data).save(`invoice_${data.farmer.identifier}_${data.invoiceNo}.pdf`);
+      const [invoiceData, ledger] = await Promise.all([
+        invoiceApi.get(payment.id),
+        ledgerApi.getLedger(payment.farmerId),
+      ]);
+      const pumpBn = pumps.find((p) => p.id === pumpId)?.pumpNameBengali;
+      const selectedEntry = ledger.seasons.find((s) => s.seasonId === selectedSeason?.id);
+      const html = await buildReceiptHtml({
+        mode: "single",
+        invoiceNo: invoiceData.invoiceNo,
+        issuedAt: new Date().toISOString(),
+        pumpName: invoiceData.pump.name,
+        pumpNameBengali: pumpBn,
+        farmerName: payment.farmerName ?? invoiceData.farmer.name,
+        farmerCode: invoiceData.farmer.identifier,
+        seasonName: selectedSeason?.seasonName ?? invoiceData.season.name ?? "",
+        year: selectedSeason?.year ?? invoiceData.season.year ?? new Date().getFullYear(),
+        payment: {
+          amount: invoiceData.payment.amount,
+          date: invoiceData.payment.paidAt,
+          method: invoiceData.payment.method,
+        },
+        lands: invoiceData.lands,
+        selectedSeasonTotal: selectedEntry?.billed ?? 0,
+        selectedSeasonDue: selectedEntry?.outstanding ?? 0,
+        otherSeasonDues: ledger.seasons
+          .filter((s) => s.seasonId !== selectedSeason?.id && s.outstanding > 0)
+          .map((s) => ({ seasonName: s.seasonName, year: s.year, due: s.outstanding })),
+        farmerPortalUrl: `https://www.irripump.com/farmer?code=${invoiceData.farmer.identifier}`,
+      });
+      printReceiptHtml(html);
+      toast({ title: "প্রিন্ট হচ্ছে..." });
     } catch (e: any) {
-      toast({ title: "ত্রুটি", description: e.message || "ইনভয়েস ডাউনলোড ব্যর্থ", variant: "destructive" });
+      toast({ title: "ত্রুটি", description: e.message || "ইনভয়েস প্রিন্ট ব্যর্থ", variant: "destructive" });
     } finally {
       setDownloadingId(null);
     }
   };
 
-  const handleDownloadList = () => {
+  const handleDownloadList = async () => {
     setDownloadingList(true);
     try {
-      buildPaymentListPdf({
-        pumpName,
-        seasonName: season,
+      const stmtDate = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+      const statementNo = `STMT-${pumpId ?? "ALL"}-${season || "ALL"}-${stmtDate}`;
+      const html = await buildReceiptHtml({
+        mode: "list",
+        statementNo,
+        issuedAt: new Date().toISOString(),
+        pumpName: pumpName,
+        seasonName: season || "",
         year,
-        payments: payments.map(p => ({
-          id: p.id,
-          farmerId: p.farmerId,
+        payments: payments.map((p) => ({
+          date: p.paymentDate,
           amount: p.amount,
-          paymentDate: p.paymentDate,
-          paymentMethod: p.paymentMethod,
-          transactionReference: p.transactionReference,
-          paymentType: p.paymentType,
-          adjustmentReason: p.adjustmentReason,
+          method: p.paymentMethod,
+          reference: p.transactionReference,
           isReversed: p.isReversed,
-        } as any)),
-      }).save(`payments_${pumpName || pumpId}_${season}_${year}.pdf`);
+        })),
+      });
+      printReceiptHtml(html);
+      toast({ title: "প্রিন্ট হচ্ছে..." });
+    } catch (e: any) {
+      toast({ title: "ত্রুটি", description: e.message, variant: "destructive" });
     } finally {
       setDownloadingList(false);
     }

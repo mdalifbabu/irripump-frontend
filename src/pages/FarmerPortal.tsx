@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useState, useEffect } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -25,6 +25,24 @@ const FarmerPortal = () => {
   const [farmerData, setFarmerData] = useState<FarmerPortalData | null>(null);
   const { toast } = useToast();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+
+  useEffect(() => {
+    const code = searchParams.get("code");
+    if (code) {
+      setFarmerCode(code);
+      setLoading(true);
+      farmerPortalApi
+        .verifyCode({ farmerCode: code.trim() })
+        .then((data) => {
+          setFarmerData(data);
+        })
+        .catch(() => {
+          // User can still type manually if auto-verify fails
+        })
+        .finally(() => setLoading(false));
+    }
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

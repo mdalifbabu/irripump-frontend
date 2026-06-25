@@ -20,7 +20,6 @@ const adminNavItems = [
   { label: "ব্যবহারকারী", path: "/admin/users" },
   { label: "কৃষক", path: "/admin/farmers" },
   { label: "অডিট লগ", path: "/admin/audit-log" },
-  { label: "সেটিংস", path: "/admin/settings" },
 ];
 
 const PAGE_SIZE = 50;

@@ -19,7 +19,6 @@ import PumpList from "./pages/admin/PumpList";
 import CreatePump from "./pages/admin/CreatePump";
 import UserList from "./pages/admin/UserList";
 import CreateUser from "./pages/admin/CreateUser";
-import AdminSettings from "./pages/admin/AdminSettings";
 import AdminFarmerList from "./pages/admin/AdminFarmerList";
 import AdminLandList from "./pages/admin/AdminLandList";
 import AdminUnitPriceList from "./pages/admin/AdminUnitPriceList";
@@ -60,7 +59,6 @@ const App = () => (
               <Route path="/admin/pumps/create" element={<ProtectedRoute role="ADMIN"><CreatePump /></ProtectedRoute>} />
               <Route path="/admin/users" element={<ProtectedRoute role="ADMIN"><UserList /></ProtectedRoute>} />
               <Route path="/admin/users/create" element={<ProtectedRoute role="ADMIN"><CreateUser /></ProtectedRoute>} />
-              <Route path="/admin/settings" element={<ProtectedRoute role="ADMIN"><AdminSettings /></ProtectedRoute>} />
               <Route path="/admin/farmers" element={<ProtectedRoute role="ADMIN"><AdminFarmerList /></ProtectedRoute>} />
               <Route path="/admin/farmers/:farmerId/ledger" element={<ProtectedRoute role="ADMIN"><AdminFarmerLedger /></ProtectedRoute>} />
               <Route path="/admin/lands" element={<ProtectedRoute role="ADMIN"><AdminLandList /></ProtectedRoute>} />

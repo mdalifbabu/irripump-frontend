@@ -24,7 +24,6 @@ const adminNavItems = [
   { label: "জমি", path: "/admin/lands" },
   { label: "মৌসুম", path: "/admin/seasons" },
   { label: "অডিট লগ", path: "/admin/audit-log" },
-  { label: "সেটিংস", path: "/admin/settings" },
 ];
 
 const AdminFarmerList = () => {

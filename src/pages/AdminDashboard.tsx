@@ -10,7 +10,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { adminApi, adminDashboardApi } from "@/lib/api/client";
 import type { AdminDashboardGroupBy, AdminDashboardResponse } from "@/lib/api/types";
-import { Droplet, Users, Plus, Building, Settings } from "lucide-react";
+import { Droplet, Users, Plus, Building } from "lucide-react";
 import AppNavbar from "@/components/AppNavbar";
 import PumpSelector from "@/components/PumpSelector";
 
@@ -21,7 +21,6 @@ const adminNavItems = [
   { label: "কৃষক", path: "/admin/farmers" },
   { label: "মৌসুম", path: "/admin/seasons" },
   { label: "অডিট লগ", path: "/admin/audit-log" },
-  { label: "সেটিংস", path: "/admin/settings" },
 ];
 
 const GROUP_BY_LABEL: Record<AdminDashboardGroupBy, string> = {
@@ -149,7 +148,6 @@ const AdminDashboard = () => {
             <Button className="w-full justify-start" variant="outline" onClick={() => navigate("/admin/users")}><Users className="w-4 h-4 mr-2" />ব্যবহারকারী পরিচালনা</Button>
             <Button className="w-full justify-start" variant="outline" onClick={() => navigate("/admin/users/create")}><Plus className="w-4 h-4 mr-2" />নতুন ব্যবহারকারী</Button>
             <Button className="w-full justify-start" variant="outline" onClick={() => navigate("/admin/farmers")}><Building className="w-4 h-4 mr-2" />সকল কৃষক</Button>
-            <Button className="w-full justify-start" variant="outline" onClick={() => navigate("/admin/settings")}><Settings className="w-4 h-4 mr-2" />সিস্টেম সেটিংস</Button>
           </CardContent>
         </Card>
       </main>

@@ -20,7 +20,6 @@ const adminNavItems = [
   { label: "ইউনিট মূল্য", path: "/admin/unit-prices" },
   { label: "মৌসুম", path: "/admin/seasons" },
   { label: "অডিট লগ", path: "/admin/audit-log" },
-  { label: "সেটিংস", path: "/admin/settings" },
 ];
 
 const AdminUnitPriceList = () => {

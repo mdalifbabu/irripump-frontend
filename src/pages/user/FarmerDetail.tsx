@@ -12,8 +12,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { usePumpContext } from "@/contexts/PumpContext";
-import { farmerApi, assignmentApi, paymentApi, unitPriceApi, seasonApi, invoiceApi } from "@/lib/api/client";
-import { buildInvoicePdf } from "@/lib/invoice/buildInvoicePdf";
+import { farmerApi, assignmentApi, paymentApi, unitPriceApi, seasonApi, invoiceApi, ledgerApi } from "@/lib/api/client";
+import { buildReceiptHtml, printReceiptHtml } from "@/lib/invoice/buildReceiptHtml";
 import type { Farmer, FarmerLandAssignment, Payment, UnitPrice, Season, FarmerDetailResponse } from "@/lib/api/types";
 import { CreditCard, Map, Phone, Mail, MapPin, Pencil, Trash2, Loader2, TrendingUp, TrendingDown, FileDown } from "lucide-react";
 import AppNavbar from "@/components/AppNavbar";
@@ -56,7 +56,7 @@ const FarmerDetail = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const { isAuthenticated, isLoading } = useAuth();
-  const { pumpId, season, year, selectedSeason } = usePumpContext();
+  const { pumpId, pumps, season, year, selectedSeason } = usePumpContext();
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) { navigate("/auth"); return; }
@@ -185,17 +185,48 @@ const FarmerDetail = () => {
 
 
   const handleDownloadInvoice = async () => {
-    const latestPayment = payments[0]; // page 0, ordered DESC → most recent
+    const latestPayment = payments[0];
     if (!latestPayment) {
       toast({ title: "কোনো পেমেন্ট নেই", description: "ইনভয়েস তৈরির জন্য অন্তত একটি পেমেন্ট প্রয়োজন", variant: "destructive" });
       return;
     }
     setDownloading(true);
     try {
-      const data = await invoiceApi.get(latestPayment.id);
-      buildInvoicePdf(data).save(`invoice_${data.farmer.identifier}_${data.invoiceNo}.pdf`);
+      const fid = parseInt(farmerId!);
+      const [invoiceData, ledger] = await Promise.all([
+        invoiceApi.get(latestPayment.id),
+        ledgerApi.getLedger(fid),
+      ]);
+      const pumpBn = pumps.find((p) => p.id === pumpId)?.pumpNameBengali;
+      const selectedEntry = ledger.seasons.find((s) => s.seasonId === selectedSeason?.id);
+      const html = await buildReceiptHtml({
+        mode: "single",
+        invoiceNo: invoiceData.invoiceNo,
+        issuedAt: new Date().toISOString(),
+        pumpName: invoiceData.pump.name,
+        pumpNameBengali: pumpBn,
+        farmerName: farmer?.nameBengali ?? invoiceData.farmer.name,
+        farmerCode: invoiceData.farmer.identifier,
+        seasonName: selectedSeason?.seasonName ?? invoiceData.season.name ?? "",
+        year: selectedSeason?.year ?? invoiceData.season.year ?? new Date().getFullYear(),
+        payment: {
+          amount: invoiceData.payment.amount,
+          date: invoiceData.payment.paidAt,
+          method: invoiceData.payment.method,
+        },
+        lands: invoiceData.lands,
+        totalLandShatak: farmerDetail?.totalLandSizeShatak ?? undefined,
+        selectedSeasonTotal: selectedEntry?.billed ?? farmerDetail?.calculatedCost ?? 0,
+        selectedSeasonDue: selectedEntry?.outstanding ?? farmerDetail?.dueAmount ?? 0,
+        otherSeasonDues: ledger.seasons
+          .filter((s) => s.seasonId !== selectedSeason?.id && s.outstanding > 0)
+          .map((s) => ({ seasonName: s.seasonName, year: s.year, due: s.outstanding })),
+        farmerPortalUrl: `https://www.irripump.com/farmer?code=${invoiceData.farmer.identifier}`,
+      });
+      printReceiptHtml(html);
+      toast({ title: "প্রিন্ট হচ্ছে..." });
     } catch (e: any) {
-      toast({ title: "Error", description: e.message || "Failed to download invoice", variant: "destructive" });
+      toast({ title: "Error", description: e.message || "Failed to print invoice", variant: "destructive" });
     } finally {
       setDownloading(false);
     }

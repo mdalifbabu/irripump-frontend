@@ -33,7 +33,6 @@ const adminNavItems = [
   { label: "কৃষক", path: "/admin/farmers" },
   { label: "মৌসুম", path: "/admin/seasons" },
   { label: "অডিট লগ", path: "/admin/audit-log" },
-  { label: "সেটিংস", path: "/admin/settings" },
 ];
 
 const createPumpSchema = z.object({
@@ -42,6 +41,7 @@ const createPumpSchema = z.object({
   location: z.string().min(1, "Location is required").max(200),
   installationDate: z.string().min(1, "Installation date is required"),
   status: z.enum(["ACTIVE", "INACTIVE", "MAINTENANCE"]),
+  farmerCodePrefix: z.string().min(1, "কৃষক কোড প্রিফিক্স আবশ্যক").max(10),
 });
 
 type CreatePumpFormData = z.infer<typeof createPumpSchema>;
@@ -59,6 +59,7 @@ const CreatePump = () => {
       location: "",
       installationDate: new Date().toISOString().split("T")[0],
       status: "ACTIVE",
+      farmerCodePrefix: "",
     },
   });
 
@@ -71,6 +72,7 @@ const CreatePump = () => {
         location: data.location,
         installationDate: data.installationDate,
         status: data.status,
+        farmerCodePrefix: data.farmerCodePrefix.trim().toUpperCase(),
       });
       toast({
         title: "Success",
@@ -138,6 +140,26 @@ const CreatePump = () => {
                       <FormControl>
                         <Input placeholder="Enter pump location" {...field} />
                       </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="farmerCodePrefix"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>কৃষক কোড প্রিফিক্স * (Farmer Code Prefix)</FormLabel>
+                      <FormControl>
+                        <Input
+                          placeholder="e.g., BK, MP, F"
+                          maxLength={10}
+                          {...field}
+                          onChange={(e) => field.onChange(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ""))}
+                        />
+                      </FormControl>
+                      <p className="text-xs text-muted-foreground">নতুন কৃষকের কোড এই প্রিফিক্স দিয়ে শুরু হবে। উদাহরণ: BK → BK00123</p>
                       <FormMessage />
                     </FormItem>
                   )}
