@@ -594,6 +594,15 @@ function AppSection() {
             <PhoneMockup />
           </div>
         </div>
+
+        {/* Full-width app screenshot showcase */}
+        <div style={{ marginTop: 64, borderRadius: 20, overflow: "hidden", boxShadow: "0 32px 64px -24px rgba(10,30,29,.35)", border: `1px solid ${C.line}` }}>
+          <img
+            src="/images/app_screenshot.png"
+            alt={isBn ? "irripump অ্যাপ স্ক্রিনশট" : "irripump app screenshot"}
+            style={{ width: "100%", display: "block", objectFit: "contain" }}
+          />
+        </div>
       </div>
     </section>
   );
