@@ -398,6 +398,7 @@ export interface UpdatePaymentRequest {
 
 export interface VerifyFarmerCodeRequest {
   farmerCode: string;
+  mobile?: string;
 }
 
 // ── Admin module: dashboard, overrides, audit log ──────────

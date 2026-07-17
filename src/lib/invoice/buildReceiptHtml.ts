@@ -322,3 +322,39 @@ export function printReceiptHtml(html: string): void {
     iframe.contentWindow?.print();
   }, 900);
 }
+
+export async function downloadReceiptAsPng(html: string, filename: string): Promise<void> {
+  const { toPng } = await import("html-to-image");
+
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(html, "text/html");
+
+  const wrapper = document.createElement("div");
+  wrapper.style.cssText = "position:fixed;left:-9999px;top:0;background:#fff;padding:4mm;box-sizing:border-box;";
+  // 74mm ≈ 280px at 96dpi
+  wrapper.style.width = "280px";
+
+  // Inline the receipt <style>
+  const styleEl = doc.querySelector("style");
+  if (styleEl) {
+    const s = document.createElement("style");
+    s.textContent = styleEl.textContent ?? "";
+    wrapper.appendChild(s);
+  }
+
+  const bodyEl = doc.body;
+  bodyEl.style.width = "280px";
+  wrapper.innerHTML += bodyEl.innerHTML;
+
+  document.body.appendChild(wrapper);
+  try {
+    await document.fonts.ready;
+    const dataUrl = await toPng(wrapper, { pixelRatio: 2, backgroundColor: "#ffffff" });
+    const a = document.createElement("a");
+    a.href = dataUrl;
+    a.download = `${filename}.png`;
+    a.click();
+  } finally {
+    document.body.removeChild(wrapper);
+  }
+}
