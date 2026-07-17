@@ -334,6 +334,13 @@ function HeroSection() {
           </div>
         </div>
 
+        <div className="md:hidden" style={{ marginTop: 48 }}>
+          <ImgSlot
+            src="/images/farmer_in_field.png"
+            alt={isBn ? "সেচ মাঠে কৃষক" : "Farmer in irrigation field"}
+            style={{ width: "100%", height: 220 }}
+          />
+        </div>
       </div>
     </section>
   );
