@@ -324,37 +324,45 @@ export function printReceiptHtml(html: string): void {
 }
 
 export async function downloadReceiptAsPng(html: string, filename: string): Promise<void> {
+  // Root causes of prior failure:
+  // 1. DOMParser approach lost the Google Fonts <link> tag, so Noto Sans Bengali never loaded
+  //    and document.fonts.ready resolved immediately with no Bangla glyphs available.
+  // 2. CSS `body {}` selector didn't match content inside a <div>, so font-family wasn't applied.
+  // Fix: write the full HTML into an iframe (same as printReceiptHtml), which processes the
+  // <link> tags and loads fonts, then capture with html-to-image from the iframe's body.
   const { toPng } = await import("html-to-image");
 
-  const parser = new DOMParser();
-  const doc = parser.parseFromString(html, "text/html");
+  const iframe = document.createElement("iframe");
+  iframe.style.cssText =
+    "position:fixed;left:-9999px;top:0;width:320px;height:5000px;border:0;visibility:hidden;";
+  document.body.appendChild(iframe);
 
-  const wrapper = document.createElement("div");
-  wrapper.style.cssText = "position:fixed;left:-9999px;top:0;background:#fff;padding:4mm;box-sizing:border-box;";
-  // 74mm ≈ 280px at 96dpi
-  wrapper.style.width = "280px";
-
-  // Inline the receipt <style>
-  const styleEl = doc.querySelector("style");
-  if (styleEl) {
-    const s = document.createElement("style");
-    s.textContent = styleEl.textContent ?? "";
-    wrapper.appendChild(s);
+  const iDoc = iframe.contentDocument ?? iframe.contentWindow?.document;
+  if (!iDoc) {
+    document.body.removeChild(iframe);
+    return;
   }
 
-  const bodyEl = doc.body;
-  bodyEl.style.width = "280px";
-  wrapper.innerHTML += bodyEl.innerHTML;
+  iDoc.open();
+  iDoc.write(html);
+  iDoc.close();
 
-  document.body.appendChild(wrapper);
   try {
-    await document.fonts.ready;
-    const dataUrl = await toPng(wrapper, { pixelRatio: 2, backgroundColor: "#ffffff" });
+    // Wait for Noto Sans Bengali (and all other fonts) to load in the iframe
+    await iDoc.fonts.ready;
+    // Extra settle time so layout completes after font metrics are applied
+    await new Promise<void>((r) => setTimeout(r, 500));
+
+    const dataUrl = await toPng(iDoc.body, {
+      pixelRatio: 2,
+      backgroundColor: "#ffffff",
+      width: 280,
+    });
     const a = document.createElement("a");
     a.href = dataUrl;
     a.download = `${filename}.png`;
     a.click();
   } finally {
-    document.body.removeChild(wrapper);
+    document.body.removeChild(iframe);
   }
 }
