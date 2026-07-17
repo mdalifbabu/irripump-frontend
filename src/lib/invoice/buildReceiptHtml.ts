@@ -347,16 +347,24 @@ export async function downloadReceiptAsPng(html: string, filename: string): Prom
   iDoc.write(html);
   iDoc.close();
 
+  // Add padding so the receipt borders aren't clipped at the capture edge.
+  // box-sizing: content-box makes the padding extend OUTSIDE the 74mm body
+  // width → total captured width ≈ 300px, giving 10px breathing room on each side.
+  iDoc.body.style.padding = "10px";
+  iDoc.body.style.boxSizing = "content-box";
+  iDoc.body.style.background = "#ffffff";
+
   try {
     // Wait for Noto Sans Bengali (and all other fonts) to load in the iframe
     await iDoc.fonts.ready;
     // Extra settle time so layout completes after font metrics are applied
     await new Promise<void>((r) => setTimeout(r, 500));
 
+    // No explicit width — let html-to-image use the body's natural rendered width
+    // (74mm content + 10px padding on each side ≈ 300px) so nothing is clipped.
     const dataUrl = await toPng(iDoc.body, {
       pixelRatio: 2,
       backgroundColor: "#ffffff",
-      width: 280,
     });
     const a = document.createElement("a");
     a.href = dataUrl;
