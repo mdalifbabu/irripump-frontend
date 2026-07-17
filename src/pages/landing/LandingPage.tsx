@@ -589,9 +589,6 @@ function AppSection() {
                 </li>
               ))}
             </ul>
-            <div style={{ marginTop: 28 }}>
-              <ImgSlot src="/images/app_screenshot.png" alt={isBn ? "অপারেটর অ্যাপ স্ক্রিনশট" : "Operator app screenshot"} style={{ width: "100%", height: 180 }} />
-            </div>
           </div>
           <div>
             <PhoneMockup />
