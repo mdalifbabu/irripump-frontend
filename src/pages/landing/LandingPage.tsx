@@ -97,7 +97,7 @@ function LedgerCard() {
         </span>
       </div>
       <div style={{ padding: "6px 4px" }}>
-        {isBn
+        {(isBn
           ? [
             { name: "মোঃ রহিম উদ্দিন", code: "CHK-০০১ · ৬৬ শতক", due: "৳ ৪,২০০", paid: false },
             { name: "ফাতেমা বেগম", code: "CHK-০০২ · ৩৩ শতক", due: "পরিশোধিত", paid: true },
@@ -108,8 +108,7 @@ function LedgerCard() {
             { name: "Fatema Begum", code: "CHK-002 · 33 shatak", due: "Paid", paid: true },
             { name: "Abdul Karim", code: "CHK-003 · 99 shatak", due: "৳ 6,800", paid: false },
           ]
-        }
-          .map((r, i) => (
+        ).map((r, i) => (
             <div key={i} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "13px 16px", borderTop: i > 0 ? `1px solid #EEF3F1` : undefined }}>
               <div>
                 <div style={{ ...BN, fontSize: 14.5, fontWeight: 600 }}>{r.name}</div>
