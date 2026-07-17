@@ -336,8 +336,8 @@ function HeroSection() {
 
         <div className="md:hidden" style={{ marginTop: 48 }}>
           <ImgSlot
-            src="/images/hero-field.jpg"
-            alt={isBn ? "সেচ মাঠ — নিজের ছবি দিয়ে বদলান" : "Irrigation field — replace with your photo"}
+            src="/images/farmer_in_field.png"
+            alt={isBn ? "সেচ মাঠে কৃষক" : "Farmer in irrigation field"}
             style={{ width: "100%", height: 220 }}
           />
         </div>
@@ -421,7 +421,7 @@ function ProblemSolutionSection() {
         </div>
 
         <div style={{ marginBottom: 40, maxWidth: 780, margin: "0 auto 40px" }}>
-          <ImgSlot src="/images/problem-khata.jpg" alt={isBn ? "কাগজের খাতার সমস্যা — নিজের ছবি দিন" : "Paper ledger problem — replace with your photo"} style={{ width: "100%", height: 220 }} />
+          <ImgSlot src="/images/ledger_problem.png" alt={isBn ? "কাগজের খাতার সমস্যা" : "Paper ledger problem"} style={{ width: "100%", height: 220 }} />
         </div>
 
         <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 22 }} className="md:grid-cols-2">
@@ -590,7 +590,7 @@ function AppSection() {
               ))}
             </ul>
             <div style={{ marginTop: 28 }}>
-              <ImgSlot src="/images/app-screenshot.jpg" alt={isBn ? "অপারেটর অ্যাপ স্ক্রিনশট — নিজের ছবি দিন" : "Operator app screenshot — replace with your photo"} style={{ width: "100%", height: 180 }} />
+              <ImgSlot src="/images/app_screenshot.png" alt={isBn ? "অপারেটর অ্যাপ স্ক্রিনশট" : "Operator app screenshot"} style={{ width: "100%", height: 180 }} />
             </div>
           </div>
           <div>
@@ -623,7 +623,7 @@ function WhoItsForSection() {
     <section style={{ padding: "96px 0", background: C.card }}>
       <div style={{ maxWidth: 1140, margin: "0 auto", padding: "0 24px" }}>
         <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 56, alignItems: "center" }} className="md:grid-cols-2">
-          <ImgSlot src="/images/farmers-field.jpg" alt={isBn ? "কৃষক মাঠে — নিজের ছবি দিন" : "Farmers in the field — replace with your photo"} style={{ width: "100%", height: 380 }} />
+          <ImgSlot src="/images/farmer_in_field.png" alt={isBn ? "সেচ মাঠে কৃষক" : "Farmer in irrigation field"} style={{ width: "100%", height: 380 }} />
           <div ref={r.ref} style={r.style}>
             <h2 style={{ ...BN, fontSize: "clamp(26px,3.5vw,36px)", fontWeight: 700, letterSpacing: -0.3, lineHeight: 1.15, color: C.ink, marginTop: 0 }}>
               {isBn ? "রুরাল বাংলাদেশের সেচ অপারেটরদের জন্য" : "For Irrigation Operators in Rural Bangladesh"}
