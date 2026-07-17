@@ -149,10 +149,10 @@ function Nav() {
   const scrolled = scrollY > 40;
 
   const links = [
-    { href: "#features", label: "ফিচার" },
-    { href: "#how", label: "যেভাবে কাজ করে" },
-    { href: "#app", label: "অ্যাপ" },
-    { href: "#faq", label: "প্রশ্ন" },
+    { href: "#features", label: "ফিচার · Features" },
+    { href: "#how", label: "যেভাবে কাজ করে · How it works" },
+    { href: "#app", label: "অ্যাপ · App" },
+    { href: "#faq", label: "প্রশ্ন · FAQ" },
   ];
 
   return (
@@ -183,9 +183,10 @@ function Nav() {
             ))}
           </nav>
 
-          <div style={{ display: "flex", alignItems: "center", gap: 14 }} className="hidden md:flex">
-            <Link to={APP_URL} style={{ color: scrolled ? C.ink : "#fff", fontWeight: 600, fontSize: 14.5, textDecoration: "none", ...BN }}>লগ ইন</Link>
-            <Link to={APP_URL} style={{ ...BN, background: `linear-gradient(150deg,${C.gold},${C.goldDeep})`, color: "#3a2905", fontSize: 15, fontWeight: 600, padding: "11px 20px", borderRadius: 13, textDecoration: "none", boxShadow: "0 8px 20px -6px rgba(183,127,15,.6)" }}>শুরু করুন</Link>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }} className="hidden md:flex">
+            <Link to="/farmer" style={{ color: scrolled ? C.teal : "rgba(255,255,255,.85)", fontWeight: 600, fontSize: 13.5, textDecoration: "none", ...BN, border: `1px solid ${scrolled ? C.teal : "rgba(255,255,255,.35)"}`, padding: "8px 14px", borderRadius: 10, transition: "all .2s" }}>কৃষক পোর্টাল · Farmer</Link>
+            <Link to={APP_URL} style={{ color: scrolled ? C.ink : "#fff", fontWeight: 600, fontSize: 14.5, textDecoration: "none", ...BN }}>লগ ইন · Login</Link>
+            <Link to={APP_URL} style={{ ...BN, background: `linear-gradient(150deg,${C.gold},${C.goldDeep})`, color: "#3a2905", fontSize: 15, fontWeight: 600, padding: "11px 20px", borderRadius: 13, textDecoration: "none", boxShadow: "0 8px 20px -6px rgba(183,127,15,.6)" }}>শুরু করুন · Start</Link>
           </div>
 
           {/* Mobile hamburger */}
@@ -204,8 +205,9 @@ function Nav() {
               <a key={l.href} href={l.href} onClick={() => setOpen(false)} style={{ display: "block", padding: "15px 4px", fontSize: 17, fontWeight: 600, borderBottom: `1px solid ${C.line}`, color: C.ink, textDecoration: "none", ...BN }}>{l.label}</a>
             ))}
             <div style={{ marginTop: 20, display: "flex", flexDirection: "column", gap: 10 }}>
-              <Link to={APP_URL} onClick={() => setOpen(false)} style={{ ...BN, textAlign: "center", padding: "13px 20px", border: `2px solid ${C.teal}`, borderRadius: 13, color: C.teal, fontWeight: 600, textDecoration: "none" }}>লগ ইন</Link>
-              <Link to={APP_URL} onClick={() => setOpen(false)} style={{ ...BN, textAlign: "center", padding: "13px 20px", background: `linear-gradient(150deg,${C.gold},${C.goldDeep})`, borderRadius: 13, color: "#3a2905", fontWeight: 700, textDecoration: "none" }}>শুরু করুন</Link>
+              <Link to="/farmer" onClick={() => setOpen(false)} style={{ ...BN, textAlign: "center", padding: "13px 20px", border: `2px solid ${C.teal}`, borderRadius: 13, color: C.teal, fontWeight: 600, textDecoration: "none" }}>কৃষক পোর্টাল · Farmer Portal</Link>
+              <Link to={APP_URL} onClick={() => setOpen(false)} style={{ ...BN, textAlign: "center", padding: "13px 20px", border: `1px solid ${C.line}`, borderRadius: 13, color: C.ink, fontWeight: 600, textDecoration: "none" }}>লগ ইন · Login</Link>
+              <Link to={APP_URL} onClick={() => setOpen(false)} style={{ ...BN, textAlign: "center", padding: "13px 20px", background: `linear-gradient(150deg,${C.gold},${C.goldDeep})`, borderRadius: 13, color: "#3a2905", fontWeight: 700, textDecoration: "none" }}>শুরু করুন · Get Started</Link>
             </div>
           </div>
         )}
@@ -229,7 +231,7 @@ function HeroSection() {
           {/* Left: copy */}
           <div>
             <div style={{ ...MONO, fontSize: 12, fontWeight: 600, letterSpacing: 2, textTransform: "uppercase", color: C.gold, marginBottom: 18 }}>
-              রুরাল বাংলাদেশের জন্য · সিজন লেজার
+              রুরাল বাংলাদেশের জন্য · For Rural Bangladesh · সিজন লেজার
             </div>
             <h1 style={{ margin: 0 }}>
               <span style={{ ...BN, display: "block", fontSize: "clamp(34px,5.5vw,56px)", lineHeight: 1.08, fontWeight: 700, letterSpacing: -0.5 }}>
@@ -239,22 +241,26 @@ function HeroSection() {
                 Your irrigation ledger, now digital
               </span>
             </h1>
-            <p style={{ ...BN, fontSize: "clamp(15px,2vw,18px)", color: "rgba(255,255,255,.86)", margin: "22px 0 30px", maxWidth: 520, lineHeight: 1.6 }}>
+            <p style={{ ...BN, fontSize: "clamp(15px,2vw,17px)", color: "rgba(255,255,255,.86)", margin: "22px 0 8px", maxWidth: 520, lineHeight: 1.65 }}>
               গভীর নলকূপের প্রতি মৌসুমের পানির বকেয়া, পেমেন্ট আর কৃষকের হিসাব — সব এক জায়গায়।
               বকেয়া নিজে থেকে হিসাব হয়, রসিদ প্রিন্ট হয় এক ট্যাপে।
             </p>
+            <p style={{ fontSize: "clamp(13px,1.5vw,15px)", color: "rgba(255,255,255,.65)", margin: "0 0 28px", maxWidth: 520, lineHeight: 1.6 }}>
+              Season-wise dues, payments &amp; farmer records — all in one place.
+              Dues calculate automatically; receipts print in one tap.
+            </p>
             <div style={{ display: "flex", gap: 14, flexWrap: "wrap" }}>
               <Link to={APP_URL} style={{ ...BN, display: "inline-flex", alignItems: "center", gap: 8, background: `linear-gradient(150deg,${C.gold},${C.goldDeep})`, color: "#3a2905", fontSize: 15, fontWeight: 700, padding: "13px 24px", borderRadius: 13, textDecoration: "none", boxShadow: "0 10px 24px -8px rgba(183,127,15,.6)" }}>
-                ফ্রি শুরু করুন
+                ফ্রি শুরু করুন · Get Started
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
               </Link>
-              <a href="#app" style={{ ...BN, display: "inline-flex", alignItems: "center", gap: 8, background: "rgba(255,255,255,.08)", color: "#fff", border: "1px solid rgba(255,255,255,.28)", fontSize: 15, fontWeight: 600, padding: "13px 24px", borderRadius: 13, textDecoration: "none" }}>
-                অ্যাপ দেখুন
-              </a>
+              <Link to="/farmer" style={{ ...BN, display: "inline-flex", alignItems: "center", gap: 8, background: "rgba(255,255,255,.08)", color: "#fff", border: "1px solid rgba(255,255,255,.28)", fontSize: 15, fontWeight: 600, padding: "13px 24px", borderRadius: 13, textDecoration: "none" }}>
+                কৃষক পোর্টাল · Farmer Portal
+              </Link>
             </div>
             <div style={{ marginTop: 26, display: "flex", alignItems: "center", gap: 10, fontSize: 13.5, color: "rgba(255,255,255,.72)", ...BN }}>
               <span style={{ width: 8, height: 8, borderRadius: "50%", background: C.gold, flexShrink: 0 }} />
-              পাম্প · বছর · মৌসুম অনুযায়ী পুরো হিসাব, বাংলায়
+              পাম্প · বছর · মৌসুম অনুযায়ী · Pump · Year · Season
             </div>
           </div>
 
@@ -280,10 +286,10 @@ function HeroSection() {
 // ─── Stats strip ──────────────────────────────────────────────────────────────
 function StatsStrip() {
   const stats = [
-    { n: "১ বিঘা = ৩৩ শতক", l: "শতকে হিসাব, বিঘায় দেখা" },
-    { n: "পাম্প → মৌসুম", l: "প্রতি মৌসুম আলাদা লেজার" },
-    { n: "অ্যান্ড্রয়েড অ্যাপ", l: "অপারেটরের হাতের মুঠোয়" },
-    { n: "বাংলা + English", l: "রসিদ ও পুরো অ্যাপ" },
+    { n: "১ বিঘা = ৩৩ শতক", l: "Enter shatak, see bigha · শতকে ইনপুট, বিঘায় দেখা" },
+    { n: "Pump → Season", l: "Separate ledger per season · মৌসুম অনুযায়ী লেজার" },
+    { n: "Android App", l: "Operator's pocket tool · অপারেটরের হাতে" },
+    { n: "বাংলা + English", l: "Receipts & full app · রসিদ ও পুরো অ্যাপ" },
   ];
   return (
     <section style={{ background: C.ink, color: "#fff", padding: "22px 0" }}>
@@ -306,8 +312,9 @@ function ProblemSolutionSection() {
     <section style={{ padding: "96px 0", background: C.paper }}>
       <div style={{ maxWidth: 1140, margin: "0 auto", padding: "0 24px" }}>
         <div ref={r.ref} style={{ ...r.style, maxWidth: 640, margin: "0 auto 54px", textAlign: "center" }}>
-          <div style={{ ...MONO, fontSize: 12, fontWeight: 600, letterSpacing: 2, textTransform: "uppercase", color: C.teal, marginBottom: 12 }}>সমস্যা ও সমাধান</div>
+          <div style={{ ...MONO, fontSize: 12, fontWeight: 600, letterSpacing: 2, textTransform: "uppercase", color: C.teal, marginBottom: 12 }}>সমস্যা ও সমাধান · Problem & Solution</div>
           <h2 style={{ ...BN, fontSize: "clamp(26px,3.5vw,38px)", fontWeight: 700, letterSpacing: -0.4, lineHeight: 1.15, margin: 0, color: C.ink }}>খাতার হিসাব রাখা কঠিন।<br />irripump সহজ করে।</h2>
+          <p style={{ fontSize: 15, color: C.muted2, marginTop: 8 }}>Paper ledgers are error-prone. irripump makes it simple.</p>
         </div>
 
         {/* Image slot between heading and cards */}
@@ -366,9 +373,10 @@ function FeaturesSection() {
     <section id="features" style={{ padding: "96px 0", background: C.card }}>
       <div style={{ maxWidth: 1140, margin: "0 auto", padding: "0 24px" }}>
         <div ref={r.ref} style={{ ...r.style, maxWidth: 640, margin: "0 auto 54px", textAlign: "center" }}>
-          <div style={{ ...MONO, fontSize: 12, fontWeight: 600, letterSpacing: 2, textTransform: "uppercase", color: C.teal, marginBottom: 12 }}>ফিচার</div>
+          <div style={{ ...MONO, fontSize: 12, fontWeight: 600, letterSpacing: 2, textTransform: "uppercase", color: C.teal, marginBottom: 12 }}>ফিচার · Features</div>
           <h2 style={{ ...BN, fontSize: "clamp(26px,3.5vw,38px)", fontWeight: 700, letterSpacing: -0.4, lineHeight: 1.15, margin: 0, color: C.ink }}>নলকূপ চালাতে যা যা লাগে, সব একসাথে</h2>
-          <p style={{ ...BN, fontSize: 17, color: C.muted, marginTop: 14 }}>প্রতিটি ফিচার তৈরি হয়েছে বাস্তব অপারেটরের কাজের কথা ভেবে।</p>
+          <p style={{ fontSize: 15, color: C.muted2, marginTop: 6 }}>Everything you need to run an irrigation pump — in one place</p>
+          <p style={{ ...BN, fontSize: 16, color: C.muted, marginTop: 6 }}>প্রতিটি ফিচার তৈরি হয়েছে বাস্তব অপারেটরের কাজের কথা ভেবে।</p>
         </div>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(280px,1fr))", gap: 20 }}>
           {FEATURES.map(({ bn, en, desc, path }) => (
@@ -408,9 +416,10 @@ function HowItWorksSection() {
     <section id="how" style={{ padding: "96px 0", background: `linear-gradient(158deg,#0d6f6e,${C.tealDeep})`, color: "#fff" }}>
       <div style={{ maxWidth: 1140, margin: "0 auto", padding: "0 24px" }}>
         <div ref={r.ref} style={{ ...r.style, maxWidth: 640, margin: "0 auto 54px", textAlign: "center" }}>
-          <div style={{ ...MONO, fontSize: 12, fontWeight: 600, letterSpacing: 2, textTransform: "uppercase", color: C.gold, marginBottom: 12 }}>যেভাবে সাজানো</div>
+          <div style={{ ...MONO, fontSize: 12, fontWeight: 600, letterSpacing: 2, textTransform: "uppercase", color: C.gold, marginBottom: 12 }}>যেভাবে সাজানো · How it works</div>
           <h2 style={{ ...BN, fontSize: "clamp(26px,3.5vw,38px)", fontWeight: 700, letterSpacing: -0.4, lineHeight: 1.15, margin: 0 }}>পাম্প থেকে পেমেন্ট — পরিষ্কার কাঠামো</h2>
-          <p style={{ ...BN, fontSize: 17, color: "rgba(255,255,255,.82)", marginTop: 14 }}>প্রতিটি হিসাব ঠিক জায়গায় বসে, তাই খুঁজে পাওয়া সহজ।</p>
+          <p style={{ fontSize: 15, color: "rgba(255,255,255,.65)", marginTop: 6 }}>From pump to payment — a clear structure</p>
+          <p style={{ ...BN, fontSize: 16, color: "rgba(255,255,255,.82)", marginTop: 6 }}>প্রতিটি হিসাব ঠিক জায়গায় বসে, তাই খুঁজে পাওয়া সহজ।</p>
         </div>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "center", flexWrap: "wrap", gap: 0 }}>
           {FLOW.map(({ n, bn, en }, i) => (
@@ -435,7 +444,7 @@ function AppSection() {
       <div style={{ maxWidth: 1140, margin: "0 auto", padding: "0 24px" }}>
         <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 56, alignItems: "center" }} className="md:grid-cols-[.9fr_1.1fr]">
           <div ref={r.ref} style={r.style}>
-            <div style={{ ...MONO, fontSize: 12, fontWeight: 600, letterSpacing: 2, textTransform: "uppercase", color: C.teal, marginBottom: 12 }}>মোবাইল অ্যাপ</div>
+            <div style={{ ...MONO, fontSize: 12, fontWeight: 600, letterSpacing: 2, textTransform: "uppercase", color: C.teal, marginBottom: 12 }}>মোবাইল অ্যাপ · Mobile App</div>
             <h2 style={{ ...BN, fontSize: "clamp(26px,3vw,34px)", fontWeight: 700, marginTop: 0, lineHeight: 1.15, color: C.ink }}>অপারেটরের হাতেই<br />পুরো নলকূপ</h2>
             <ul style={{ listStyle: "none", display: "flex", flexDirection: "column", gap: 20, marginTop: 26 }}>
               {[
@@ -505,11 +514,12 @@ function FarmerLookupBand() {
   return (
     <section style={{ padding: "48px 0", background: C.tealSoft, borderTop: `1px solid ${C.line}` }}>
       <div style={{ maxWidth: 700, margin: "0 auto", padding: "0 24px", textAlign: "center" }}>
-        <div style={{ ...MONO, fontSize: 12, fontWeight: 600, letterSpacing: 2, textTransform: "uppercase", color: C.teal, marginBottom: 10 }}>কৃষক পোর্টাল</div>
-        <h2 style={{ ...BN, fontSize: "clamp(22px,3vw,30px)", fontWeight: 700, color: C.ink, margin: "0 0 10px" }}>আপনার বকেয়া দেখুন</h2>
+        <div style={{ ...MONO, fontSize: 12, fontWeight: 600, letterSpacing: 2, textTransform: "uppercase", color: C.teal, marginBottom: 10 }}>কৃষক পোর্টাল · Farmer Portal</div>
+        <h2 style={{ ...BN, fontSize: "clamp(22px,3vw,30px)", fontWeight: 700, color: C.ink, margin: "0 0 6px" }}>আপনার বকেয়া দেখুন</h2>
+        <p style={{ fontSize: "clamp(14px,2vw,16px)", color: C.muted2, marginBottom: 6 }}>Check your dues &amp; payment history</p>
         <p style={{ ...BN, color: C.muted, marginBottom: 22, fontSize: 15 }}>কৃষক কোড ও মোবাইল নম্বর দিয়ে আপনার মৌসুম-ভিত্তিক বকেয়া ও পেমেন্ট ইতিহাস দেখুন।</p>
         <Link to="/farmer" style={{ ...BN, display: "inline-flex", alignItems: "center", gap: 8, background: C.teal, color: "#fff", fontSize: 15, fontWeight: 700, padding: "13px 26px", borderRadius: 13, textDecoration: "none" }}>
-          কোড দিয়ে দেখুন
+          কোড দিয়ে দেখুন · Check with Code
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
         </Link>
       </div>
@@ -564,10 +574,12 @@ function FinalCTASection() {
       <div style={{ maxWidth: 1140, margin: "0 auto", padding: "0 24px" }}>
         <div ref={r.ref} style={{ ...r.style, background: `linear-gradient(150deg,${C.gold},${C.goldDeep})`, color: "#3a2905", borderRadius: 28, padding: "clamp(36px,5vw,56px)", textAlign: "center", position: "relative", overflow: "hidden" }}>
           <h2 style={{ ...BN, fontSize: "clamp(24px,3.5vw,34px)", fontWeight: 700, letterSpacing: -0.3, margin: 0 }}>আজই কাগজের খাতা ছাড়ুন</h2>
-          <p style={{ ...BN, fontSize: 17, margin: "12px auto 28px", maxWidth: 520, color: "#5a4208" }}>আপনার নলকূপের হিসাব ডিজিটাল করতে একটি ডেমো নিন — সেটআপে আমরা সাহায্য করব।</p>
+          <p style={{ fontSize: "clamp(13px,1.8vw,16px)", margin: "6px auto 8px", color: "#6b5210" }}>Leave the paper ledger behind — go digital today</p>
+          <p style={{ ...BN, fontSize: 16, margin: "0 auto 28px", maxWidth: 520, color: "#5a4208" }}>আপনার নলকূপের হিসাব ডিজিটাল করতে একটি ডেমো নিন — সেটআপে আমরা সাহায্য করব।</p>
           <div style={{ display: "flex", gap: 14, justifyContent: "center", flexWrap: "wrap" }}>
-            <Link to={APP_URL} style={{ ...BN, display: "inline-flex", alignItems: "center", gap: 8, background: C.ink, color: "#fff", fontSize: 15, fontWeight: 700, padding: "13px 26px", borderRadius: 13, textDecoration: "none" }}>শুরু করুন</Link>
-            <a href={`mailto:${CONTACT_EMAIL}?subject=irripump demo request`} style={{ ...BN, display: "inline-flex", alignItems: "center", gap: 8, background: "rgba(58,41,5,.12)", color: "#3a2905", fontSize: 15, fontWeight: 600, padding: "13px 26px", borderRadius: 13, textDecoration: "none" }}>যোগাযোগ করুন</a>
+            <Link to={APP_URL} style={{ ...BN, display: "inline-flex", alignItems: "center", gap: 8, background: C.ink, color: "#fff", fontSize: 15, fontWeight: 700, padding: "13px 26px", borderRadius: 13, textDecoration: "none" }}>শুরু করুন · Get Started</Link>
+            <Link to="/farmer" style={{ ...BN, display: "inline-flex", alignItems: "center", gap: 8, background: "rgba(58,41,5,.12)", color: "#3a2905", fontSize: 15, fontWeight: 600, padding: "13px 26px", borderRadius: 13, textDecoration: "none" }}>কৃষক পোর্টাল · Farmer Portal</Link>
+            <a href={`mailto:${CONTACT_EMAIL}?subject=irripump demo request`} style={{ ...BN, display: "inline-flex", alignItems: "center", gap: 8, background: "rgba(58,41,5,.08)", color: "#3a2905", fontSize: 14, fontWeight: 600, padding: "13px 22px", borderRadius: 13, textDecoration: "none" }}>যোগাযোগ · Contact</a>
           </div>
         </div>
       </div>
@@ -591,9 +603,9 @@ function Footer() {
             <p style={{ ...BN, fontSize: 14, marginTop: 14, maxWidth: 280, lineHeight: 1.6 }}>রুরাল বাংলাদেশের গভীর নলকূপ অপারেটরদের জন্য সিজন-ভিত্তিক পানির হিসাব ও পেমেন্ট ব্যবস্থাপনা।</p>
           </div>
           {[
-            { head: "পণ্য", links: [{ href: "#features", label: "ফিচার" }, { href: "#how", label: "যেভাবে কাজ করে" }, { href: "#app", label: "মোবাইল অ্যাপ" }] },
-            { head: "কোম্পানি", links: [{ href: "/contact", label: "যোগাযোগ" }, { href: `mailto:${CONTACT_EMAIL}?subject=irripump demo`, label: "ডেমো বুক করুন" }, { href: "/farmer", label: "কৃষক পোর্টাল" }] },
-            { head: "আইনি", links: [{ href: "/terms", label: "শর্তাবলী · Terms" }, { href: "/privacy", label: "গোপনীয়তা · Privacy" }, { href: "/refund", label: "রিফান্ড নীতি" }] },
+            { head: "পণ্য · Product", links: [{ href: "#features", label: "ফিচার · Features" }, { href: "#how", label: "যেভাবে কাজ করে · How it works" }, { href: "#app", label: "মোবাইল অ্যাপ · App" }] },
+            { head: "কোম্পানি · Company", links: [{ href: "/contact", label: "যোগাযোগ · Contact" }, { href: `mailto:${CONTACT_EMAIL}?subject=irripump demo`, label: "ডেমো · Book Demo" }, { href: "/farmer", label: "কৃষক পোর্টাল · Farmer" }] },
+            { head: "আইনি · Legal", links: [{ href: "/terms", label: "শর্তাবলী · Terms" }, { href: "/privacy", label: "গোপনীয়তা · Privacy" }, { href: "/refund", label: "রিফান্ড · Refund" }] },
           ].map(({ head, links }) => (
             <div key={head}>
               <h6 style={{ color: "#fff", fontSize: 13, fontWeight: 600, textTransform: "uppercase", letterSpacing: 1, marginBottom: 16 }}>{head}</h6>
