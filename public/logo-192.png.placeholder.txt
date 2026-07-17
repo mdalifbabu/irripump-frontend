@@ -1,0 +1,12 @@
+PLACEHOLDER — replace this with the real file: logo-192.png
+
+Required: logo-192.png
+- Size: 192×192 px (square)
+- Format: PNG with transparent background
+- Content: irripump droplet logo on transparent/white background
+- Used by: browser tab icon, Android home screen, apple-touch-icon
+
+Also needed in this folder:
+  logo-512.png  — 512×512 px PNG, same logo (Google logo schema + PWA)
+  og-image.png  — 1200×630 px PNG (social sharing card, Google rich results)
+                  Suggested content: irripump logo + tagline on teal background
