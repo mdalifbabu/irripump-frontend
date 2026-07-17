@@ -286,8 +286,8 @@ tr.reversed td { color: #999; text-decoration: line-through; }
 <head>
 <meta charset="utf-8"/>
 <title>${docNo}</title>
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
-<link href="${FONT_URL}" rel="stylesheet"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous"/>
+<link href="${FONT_URL}" rel="stylesheet" crossorigin="anonymous"/>
 <style>${css}</style>
 </head>
 <body>
