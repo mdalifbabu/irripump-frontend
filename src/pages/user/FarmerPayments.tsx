@@ -18,7 +18,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { usePumpContext } from "@/contexts/PumpContext";
 import { farmerApi, paymentApi, invoiceApi, ledgerApi } from "@/lib/api/client";
 import type { FarmerDetailResponse } from "@/lib/api/types";
-import { buildReceiptHtml, printReceiptHtml } from "@/lib/invoice/buildReceiptHtml";
+import { buildReceiptHtml, printReceiptHtml, downloadReceiptAsPng } from "@/lib/invoice/buildReceiptHtml";
 import type { Farmer, Payment } from "@/lib/api/types";
 import { Plus, Loader2, Download, Pencil, Trash2, FileText } from "lucide-react";
 import AppNavbar from "@/components/AppNavbar";
@@ -50,6 +50,7 @@ const FarmerPayments = () => {
   const [totalElements, setTotalElements] = useState(0);
   const [submitting, setSubmitting] = useState(false);
   const [downloadingId, setDownloadingId] = useState<number | null>(null);
+  const [downloadingPngId, setDownloadingPngId] = useState<number | null>(null);
   const [downloadingList, setDownloadingList] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<{ id: number; amount: number; reason: string } | null>(null);
@@ -166,6 +167,41 @@ const FarmerPayments = () => {
       toast({ title: "Error", description: e.message || "Failed to print invoice", variant: "destructive" });
     } finally {
       setDownloadingId(null);
+    }
+  };
+
+  const handleDownloadInvoicePng = async (payment: Payment) => {
+    setDownloadingPngId(payment.id);
+    try {
+      const id = parseInt(farmerId!);
+      const [invoiceData, ledger] = await Promise.all([invoiceApi.get(payment.id), ledgerApi.getLedger(id)]);
+      const pumpBn = pumps.find((p) => p.id === pumpId)?.pumpNameBengali;
+      const selectedEntry = ledger.seasons.find((s) => s.seasonId === selectedSeason?.id);
+      const html = await buildReceiptHtml({
+        mode: "single",
+        invoiceNo: invoiceData.invoiceNo,
+        issuedAt: new Date().toISOString(),
+        pumpName: invoiceData.pump.name,
+        pumpNameBengali: pumpBn,
+        farmerName: farmer?.nameBengali ?? invoiceData.farmer.name,
+        farmerCode: invoiceData.farmer.identifier,
+        seasonName: selectedSeason?.seasonName ?? invoiceData.season.name ?? "",
+        year: selectedSeason?.year ?? invoiceData.season.year ?? new Date().getFullYear(),
+        payment: { amount: invoiceData.payment.amount, date: invoiceData.payment.paidAt, method: invoiceData.payment.method },
+        lands: invoiceData.lands,
+        totalLandShatak: farmerDetail?.totalLandSizeShatak ?? undefined,
+        selectedSeasonTotal: selectedEntry?.billed ?? farmerDetail?.calculatedCost ?? 0,
+        selectedSeasonDue: selectedEntry?.outstanding ?? farmerDetail?.dueAmount ?? 0,
+        otherSeasonDues: ledger.seasons.filter((s) => s.seasonId !== selectedSeason?.id && s.outstanding > 0)
+          .map((s) => ({ seasonName: s.seasonName, year: s.year, due: s.outstanding })),
+        farmerPortalUrl: `https://www.irripump.com/farmer?code=${invoiceData.farmer.identifier}`,
+      });
+      await downloadReceiptAsPng(html, invoiceData.invoiceNo);
+      toast({ title: "PNG ডাউনলোড হচ্ছে..." });
+    } catch (e: any) {
+      toast({ title: "Error", description: e.message || "Failed to download PNG", variant: "destructive" });
+    } finally {
+      setDownloadingPngId(null);
     }
   };
 
@@ -293,8 +329,11 @@ const FarmerPayments = () => {
                         <TableCell className="hidden md:table-cell font-mono text-xs">{p.transactionReference || "-"}</TableCell>
                         <TableCell>
                           <div className="flex gap-1">
-                            <Button size="icon" variant="outline" className="h-8 w-8" title="ইনভয়েস" onClick={() => handleDownloadInvoice(p)} disabled={downloadingId === p.id}>
+                            <Button size="icon" variant="outline" className="h-8 w-8" title="রসিদ প্রিন্ট" onClick={() => handleDownloadInvoice(p)} disabled={downloadingId === p.id}>
                               {downloadingId === p.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
+                            </Button>
+                            <Button size="icon" variant="outline" className="h-8 w-8" title="PNG ডাউনলোড" onClick={() => handleDownloadInvoicePng(p)} disabled={downloadingPngId === p.id}>
+                              {downloadingPngId === p.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FileText className="w-3.5 h-3.5" />}
                             </Button>
                             <Button size="icon" variant="outline" className="h-8 w-8" onClick={() => setEditing({ id: p.id, amount: p.amount, reason: "" })}><Pencil className="w-3.5 h-3.5" /></Button>
                             <Button size="icon" variant="outline" className="h-8 w-8 text-destructive" onClick={() => setDeleting(p)}><Trash2 className="w-3.5 h-3.5" /></Button>

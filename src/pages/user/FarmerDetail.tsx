@@ -13,9 +13,9 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { usePumpContext } from "@/contexts/PumpContext";
 import { farmerApi, assignmentApi, paymentApi, unitPriceApi, seasonApi, invoiceApi, ledgerApi } from "@/lib/api/client";
-import { buildReceiptHtml, printReceiptHtml } from "@/lib/invoice/buildReceiptHtml";
+import { buildReceiptHtml, printReceiptHtml, downloadReceiptAsPng } from "@/lib/invoice/buildReceiptHtml";
 import type { Farmer, FarmerLandAssignment, Payment, UnitPrice, Season, FarmerDetailResponse } from "@/lib/api/types";
-import { CreditCard, Map, Phone, Mail, MapPin, Pencil, Trash2, Loader2, TrendingUp, TrendingDown, FileDown } from "lucide-react";
+import { CreditCard, Map, Phone, Mail, MapPin, Pencil, Trash2, Loader2, TrendingUp, TrendingDown, FileDown, Image } from "lucide-react";
 import AppNavbar from "@/components/AppNavbar";
 import PumpSelector from "@/components/PumpSelector";
 import PaginationBar from "@/components/PaginationBar";
@@ -50,6 +50,7 @@ const FarmerDetail = () => {
   const [unitPrices, setUnitPrices] = useState<UnitPrice[]>([]);
   const [loading, setLoading] = useState(true);
   const [downloading, setDownloading] = useState(false);
+  const [downloadingPng, setDownloadingPng] = useState(false);
   const [editing, setEditing] = useState<Farmer | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -232,6 +233,46 @@ const FarmerDetail = () => {
     }
   };
 
+  const handleDownloadInvoicePng = async () => {
+    const latestPayment = payments[0];
+    if (!latestPayment) {
+      toast({ title: "কোনো পেমেন্ট নেই", variant: "destructive" });
+      return;
+    }
+    setDownloadingPng(true);
+    try {
+      const fid = parseInt(farmerId!);
+      const [invoiceData, ledger] = await Promise.all([invoiceApi.get(latestPayment.id), ledgerApi.getLedger(fid)]);
+      const pumpBn = pumps.find((p) => p.id === pumpId)?.pumpNameBengali;
+      const selectedEntry = ledger.seasons.find((s) => s.seasonId === selectedSeason?.id);
+      const html = await buildReceiptHtml({
+        mode: "single",
+        invoiceNo: invoiceData.invoiceNo,
+        issuedAt: new Date().toISOString(),
+        pumpName: invoiceData.pump.name,
+        pumpNameBengali: pumpBn,
+        farmerName: farmer?.nameBengali ?? invoiceData.farmer.name,
+        farmerCode: invoiceData.farmer.identifier,
+        seasonName: selectedSeason?.seasonName ?? invoiceData.season.name ?? "",
+        year: selectedSeason?.year ?? invoiceData.season.year ?? new Date().getFullYear(),
+        payment: { amount: invoiceData.payment.amount, date: invoiceData.payment.paidAt, method: invoiceData.payment.method },
+        lands: invoiceData.lands,
+        totalLandShatak: farmerDetail?.totalLandSizeShatak ?? undefined,
+        selectedSeasonTotal: selectedEntry?.billed ?? farmerDetail?.calculatedCost ?? 0,
+        selectedSeasonDue: selectedEntry?.outstanding ?? farmerDetail?.dueAmount ?? 0,
+        otherSeasonDues: ledger.seasons.filter((s) => s.seasonId !== selectedSeason?.id && s.outstanding > 0)
+          .map((s) => ({ seasonName: s.seasonName, year: s.year, due: s.outstanding })),
+        farmerPortalUrl: `https://www.irripump.com/farmer?code=${invoiceData.farmer.identifier}`,
+      });
+      await downloadReceiptAsPng(html, invoiceData.invoiceNo);
+      toast({ title: "PNG ডাউনলোড হচ্ছে..." });
+    } catch (e: any) {
+      toast({ title: "Error", description: e.message || "Failed to download PNG", variant: "destructive" });
+    } finally {
+      setDownloadingPng(false);
+    }
+  };
+
   const currentSummary = seasonSummaries.find(s => s.season.seasonName.toUpperCase() === season.toUpperCase() && s.season.year === year);
 
   const backendCost = farmerDetail?.calculatedCost ?? currentSummary?.calculatedCost ?? 0;
@@ -312,7 +353,11 @@ const FarmerDetail = () => {
           </Button>
           <Button variant="outline" onClick={handleDownloadInvoice} disabled={downloading}>
             {downloading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <FileDown className="w-4 h-4 mr-2" />}
-            ইনভয়েস ডাউনলোড
+            ইনভয়েস প্রিন্ট
+          </Button>
+          <Button variant="outline" onClick={handleDownloadInvoicePng} disabled={downloadingPng} title="PNG হিসেবে ডাউনলোড">
+            {downloadingPng ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Image className="w-4 h-4 mr-2" />}
+            PNG
           </Button>
         </div>
 
