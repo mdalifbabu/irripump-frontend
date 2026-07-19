@@ -12,10 +12,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { usePumpContext } from "@/contexts/PumpContext";
-import { farmerApi, assignmentApi, paymentApi, unitPriceApi, seasonApi, invoiceApi, ledgerApi } from "@/lib/api/client";
-import { buildReceiptHtml, printReceiptHtml, downloadReceiptAsPng } from "@/lib/invoice/buildReceiptHtml";
-import type { Farmer, FarmerLandAssignment, Payment, UnitPrice, Season, FarmerDetailResponse } from "@/lib/api/types";
-import { CreditCard, Map, Phone, Mail, MapPin, Pencil, Trash2, Loader2, TrendingUp, TrendingDown, FileDown, Image } from "lucide-react";
+import { farmerApi, assignmentApi, paymentApi, unitPriceApi, seasonApi } from "@/lib/api/client";
+import type { Farmer, FarmerLandAssignment, UnitPrice, Season, FarmerDetailResponse } from "@/lib/api/types";
+import { CreditCard, Map, Phone, Mail, MapPin, Pencil, Trash2, Loader2, TrendingUp, TrendingDown } from "lucide-react";
 import AppNavbar from "@/components/AppNavbar";
 import PumpSelector from "@/components/PumpSelector";
 import PaginationBar from "@/components/PaginationBar";
@@ -38,26 +37,20 @@ const FarmerDetail = () => {
   const { farmerId } = useParams<{ farmerId: string }>();
   const [farmer, setFarmer] = useState<Farmer | null>(null);
   const [farmerDetail, setFarmerDetail] = useState<FarmerDetailResponse | null>(null);
-  const [allSeasons, setAllSeasons] = useState<Season[]>([]);
   const [seasonSummaries, setSeasonSummaries] = useState<SeasonSummary[]>([]);
   const [seasonHistoryPage, setSeasonHistoryPage] = useState(0);
   const [seasonHistoryTotal, setSeasonHistoryTotal] = useState(0);
   const [seasonHistoryTotalPages, setSeasonHistoryTotalPages] = useState(0);
-  const [payments, setPayments] = useState<Payment[]>([]);
   const [payTotalElements, setPayTotalElements] = useState(0);
-  const [payCurrentPage, setPayCurrentPage] = useState(0);
-  const [payTotalPages, setPayTotalPages] = useState(0);
   const [unitPrices, setUnitPrices] = useState<UnitPrice[]>([]);
   const [loading, setLoading] = useState(true);
-  const [downloading, setDownloading] = useState(false);
-  const [downloadingPng, setDownloadingPng] = useState(false);
   const [editing, setEditing] = useState<Farmer | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [busy, setBusy] = useState(false);
   const navigate = useNavigate();
   const { toast } = useToast();
   const { isAuthenticated, isLoading } = useAuth();
-  const { pumpId, pumps, season, year, selectedSeason } = usePumpContext();
+  const { pumpId, season, year, selectedSeason } = usePumpContext();
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) { navigate("/auth"); return; }
@@ -68,17 +61,6 @@ const FarmerDetail = () => {
     if (farmerId && pumpId && season && year) fetchData();
   }, [pumpId, season, year]);
 
-  const fetchPayments = async (page: number) => {
-    if (!farmerId) return;
-    try {
-      const result = await paymentApi.getByFarmerPaged(parseInt(farmerId!), page, PAY_PAGE_SIZE, selectedSeason?.id, selectedSeason?.id ? undefined : year);
-      setPayments(result.content);
-      setPayCurrentPage(result.number);
-      setPayTotalPages(result.totalPages);
-      setPayTotalElements(result.totalElements);
-    } catch { /* non-critical */ }
-  };
-
   const fetchSeasonHistory = async (page: number, up?: UnitPrice[]) => {
     if (!farmerId || !pumpId) return;
     const prices = up ?? unitPrices;
@@ -87,7 +69,6 @@ const FarmerDetail = () => {
       setSeasonHistoryPage(result.number);
       setSeasonHistoryTotal(result.totalElements);
       setSeasonHistoryTotalPages(result.totalPages);
-
       const summaries: SeasonSummary[] = [];
       for (const s of result.content) {
         try {
@@ -115,29 +96,20 @@ const FarmerDetail = () => {
     if (!pumpId || !farmerId) return;
     setLoading(true);
     try {
-      const [f, allS, p, up] = await Promise.all([
+      const [f, p, up] = await Promise.all([
         farmerApi.getById(parseInt(farmerId!)),
-        seasonApi.getActive(),
         paymentApi.getByFarmerPaged(parseInt(farmerId!), 0, PAY_PAGE_SIZE, selectedSeason?.id, selectedSeason?.id ? undefined : year),
         unitPriceApi.getByPump(pumpId),
       ]);
       setFarmer(f);
-      setAllSeasons(allS);
-      setPayments(p.content);
-      setPayCurrentPage(p.number);
-      setPayTotalPages(p.totalPages);
       setPayTotalElements(p.totalElements);
       setUnitPrices(up);
-
-      // Fetch backend-calculated cost/due/advance for the selected season
       if (selectedSeason?.id) {
         try {
           const detail = await farmerApi.getDetail(parseInt(farmerId!), selectedSeason.id, selectedSeason.year);
           setFarmerDetail(detail);
         } catch { /* detail is optional */ }
       }
-
-      // Season history is loaded separately (paginated) — pass up directly to avoid stale closure
       await fetchSeasonHistory(0, up);
     } catch (e: any) {
       toast({ title: "Error", description: e.message || "Failed to fetch", variant: "destructive" });
@@ -184,97 +156,7 @@ const FarmerDetail = () => {
     }
   };
 
-
-  const handleDownloadInvoice = async () => {
-    const latestPayment = payments[0];
-    if (!latestPayment) {
-      toast({ title: "কোনো পেমেন্ট নেই", description: "ইনভয়েস তৈরির জন্য অন্তত একটি পেমেন্ট প্রয়োজন", variant: "destructive" });
-      return;
-    }
-    setDownloading(true);
-    try {
-      const fid = parseInt(farmerId!);
-      const [invoiceData, ledger] = await Promise.all([
-        invoiceApi.get(latestPayment.id),
-        ledgerApi.getLedger(fid),
-      ]);
-      const pumpBn = pumps.find((p) => p.id === pumpId)?.pumpNameBengali;
-      const selectedEntry = ledger.seasons.find((s) => s.seasonId === selectedSeason?.id);
-      const html = await buildReceiptHtml({
-        mode: "single",
-        invoiceNo: invoiceData.invoiceNo,
-        issuedAt: new Date().toISOString(),
-        pumpName: invoiceData.pump.name,
-        pumpNameBengali: pumpBn,
-        farmerName: farmer?.nameBengali ?? invoiceData.farmer.name,
-        farmerCode: invoiceData.farmer.identifier,
-        seasonName: selectedSeason?.seasonName ?? invoiceData.season.name ?? "",
-        year: selectedSeason?.year ?? invoiceData.season.year ?? new Date().getFullYear(),
-        payment: {
-          amount: invoiceData.payment.amount,
-          date: invoiceData.payment.paidAt,
-          method: invoiceData.payment.method,
-        },
-        lands: invoiceData.lands,
-        totalLandShatak: farmerDetail?.totalLandSizeShatak ?? undefined,
-        selectedSeasonTotal: selectedEntry?.billed ?? farmerDetail?.calculatedCost ?? 0,
-        selectedSeasonDue: selectedEntry?.outstanding ?? farmerDetail?.dueAmount ?? 0,
-        otherSeasonDues: ledger.seasons
-          .filter((s) => s.seasonId !== selectedSeason?.id && s.outstanding > 0)
-          .map((s) => ({ seasonName: s.seasonName, year: s.year, due: s.outstanding })),
-        farmerPortalUrl: `https://www.irripump.com/farmer?code=${invoiceData.farmer.identifier}`,
-      });
-      printReceiptHtml(html);
-      toast({ title: "প্রিন্ট হচ্ছে..." });
-    } catch (e: any) {
-      toast({ title: "Error", description: e.message || "Failed to print invoice", variant: "destructive" });
-    } finally {
-      setDownloading(false);
-    }
-  };
-
-  const handleDownloadInvoicePng = async () => {
-    const latestPayment = payments[0];
-    if (!latestPayment) {
-      toast({ title: "কোনো পেমেন্ট নেই", variant: "destructive" });
-      return;
-    }
-    setDownloadingPng(true);
-    try {
-      const fid = parseInt(farmerId!);
-      const [invoiceData, ledger] = await Promise.all([invoiceApi.get(latestPayment.id), ledgerApi.getLedger(fid)]);
-      const pumpBn = pumps.find((p) => p.id === pumpId)?.pumpNameBengali;
-      const selectedEntry = ledger.seasons.find((s) => s.seasonId === selectedSeason?.id);
-      const html = await buildReceiptHtml({
-        mode: "single",
-        invoiceNo: invoiceData.invoiceNo,
-        issuedAt: new Date().toISOString(),
-        pumpName: invoiceData.pump.name,
-        pumpNameBengali: pumpBn,
-        farmerName: farmer?.nameBengali ?? invoiceData.farmer.name,
-        farmerCode: invoiceData.farmer.identifier,
-        seasonName: selectedSeason?.seasonName ?? invoiceData.season.name ?? "",
-        year: selectedSeason?.year ?? invoiceData.season.year ?? new Date().getFullYear(),
-        payment: { amount: invoiceData.payment.amount, date: invoiceData.payment.paidAt, method: invoiceData.payment.method },
-        lands: invoiceData.lands,
-        totalLandShatak: farmerDetail?.totalLandSizeShatak ?? undefined,
-        selectedSeasonTotal: selectedEntry?.billed ?? farmerDetail?.calculatedCost ?? 0,
-        selectedSeasonDue: selectedEntry?.outstanding ?? farmerDetail?.dueAmount ?? 0,
-        otherSeasonDues: ledger.seasons.filter((s) => s.seasonId !== selectedSeason?.id && s.outstanding > 0)
-          .map((s) => ({ seasonName: s.seasonName, year: s.year, due: s.outstanding })),
-        farmerPortalUrl: `https://www.irripump.com/farmer?code=${invoiceData.farmer.identifier}`,
-      });
-      await downloadReceiptAsPng(html, invoiceData.invoiceNo);
-      toast({ title: "PNG ডাউনলোড হচ্ছে..." });
-    } catch (e: any) {
-      toast({ title: "Error", description: e.message || "Failed to download PNG", variant: "destructive" });
-    } finally {
-      setDownloadingPng(false);
-    }
-  };
-
   const currentSummary = seasonSummaries.find(s => s.season.seasonName.toUpperCase() === season.toUpperCase() && s.season.year === year);
-
   const backendCost = farmerDetail?.calculatedCost ?? currentSummary?.calculatedCost ?? 0;
   const backendPaid = farmerDetail?.totalPaid ?? 0;
   const backendDue = farmerDetail?.dueAmount ?? currentSummary?.due ?? 0;
@@ -308,7 +190,7 @@ const FarmerDetail = () => {
               <p className="text-xs text-muted-foreground">বর্তমান মৌসুম</p>
               <p className="text-lg font-bold">{season}/{year}</p>
               <p className="text-sm">{farmerDetail?.landCount != null ? `${farmerDetail.landCount} জমি` : currentSummary ? `${currentSummary.totalLandShatak.toFixed(2)} শতক` : "তথ্য নেই"}</p>
-              {currentSummary && <p className="text-xs text-muted-foreground">{(currentSummary.totalLandShatak/33).toFixed(3)} বিঘা</p>}
+              {currentSummary && <p className="text-xs text-muted-foreground">{(currentSummary.totalLandShatak / 33).toFixed(3)} বিঘা</p>}
             </CardContent>
           </Card>
           <Card>
@@ -351,25 +233,16 @@ const FarmerDetail = () => {
           <Button onClick={() => navigate(`/user/farmers/${farmerId}/payments`)}>
             <CreditCard className="w-4 h-4 mr-2" />পেমেন্ট পরিচালনা
           </Button>
-          <Button variant="outline" onClick={handleDownloadInvoice} disabled={downloading}>
-            {downloading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <FileDown className="w-4 h-4 mr-2" />}
-            ইনভয়েস প্রিন্ট
-          </Button>
-          <Button variant="outline" onClick={handleDownloadInvoicePng} disabled={downloadingPng} title="PNG হিসেবে ডাউনলোড">
-            {downloadingPng ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Image className="w-4 h-4 mr-2" />}
-            PNG
-          </Button>
         </div>
 
         <Tabs defaultValue="overview">
           <TabsList className="flex-wrap h-auto">
             <TabsTrigger value="overview">সারসংক্ষেপ</TabsTrigger>
             <TabsTrigger value="seasons">মৌসুম ইতিহাস</TabsTrigger>
-            <TabsTrigger value="payments">পেমেন্ট</TabsTrigger>
             <TabsTrigger value="info">ব্যক্তিগত তথ্য</TabsTrigger>
           </TabsList>
 
-          {/* Overview tab */}
+          {/* Overview */}
           <TabsContent value="overview" className="space-y-4">
             {currentSummary ? (
               <Card>
@@ -388,14 +261,18 @@ const FarmerDetail = () => {
                         return (
                           <TableRow key={a.id}>
                             <TableCell>{a.landmarkNumber}</TableCell>
-                            <TableCell className="font-bold">{ls.toFixed(2)} শতক<br/><span className="text-xs text-muted-foreground font-normal">{(ls/33).toFixed(3)} বিঘা</span></TableCell>
+                            <TableCell className="font-bold">
+                              {ls.toFixed(2)} শতক
+                              <br />
+                              <span className="text-xs text-muted-foreground font-normal">{(ls / 33).toFixed(3)} বিঘা</span>
+                            </TableCell>
                           </TableRow>
                         );
                       })}
                     </TableBody>
                   </Table>
                   <div className="mt-4 grid grid-cols-2 md:grid-cols-4 gap-3 pt-4 border-t">
-                    <div><p className="text-xs text-muted-foreground">মোট জমি</p><p className="font-bold">{currentSummary.totalLandShatak.toFixed(2)} শতক</p><p className="text-xs text-muted-foreground">{(currentSummary.totalLandShatak/33).toFixed(3)} বিঘা</p></div>
+                    <div><p className="text-xs text-muted-foreground">মোট জমি</p><p className="font-bold">{currentSummary.totalLandShatak.toFixed(2)} শতক</p><p className="text-xs text-muted-foreground">{(currentSummary.totalLandShatak / 33).toFixed(3)} বিঘা</p></div>
                     <div><p className="text-xs text-muted-foreground">খরচ (ব্যাকএন্ড)</p><p className="font-bold text-blue-600">৳{backendCost.toFixed(2)}</p></div>
                     <div><p className="text-xs text-muted-foreground">পরিশোধ</p><p className="font-bold text-green-600">৳{backendPaid.toFixed(2)}</p></div>
                     <div>
@@ -408,10 +285,12 @@ const FarmerDetail = () => {
                 </CardContent>
               </Card>
             ) : (
-              <Card><CardContent className="py-8 text-center text-muted-foreground">
-                এই মৌসুমে ({season}/{year}) কোনো জমি বরাদ্দ নেই।{" "}
-                <Button variant="link" className="p-0" onClick={() => navigate(`/user/farmers/${farmerId}/lands`)}>জমি যোগ করুন</Button>
-              </CardContent></Card>
+              <Card>
+                <CardContent className="py-8 text-center text-muted-foreground">
+                  এই মৌসুমে ({season}/{year}) কোনো জমি বরাদ্দ নেই।{" "}
+                  <Button variant="link" className="p-0" onClick={() => navigate(`/user/farmers/${farmerId}/lands`)}>জমি যোগ করুন</Button>
+                </CardContent>
+              </Card>
             )}
           </TabsContent>
 
@@ -441,10 +320,7 @@ const FarmerDetail = () => {
                       </div>
                     </div>
                     <div className="mt-2 flex justify-end">
-                      <Button size="sm" variant="outline"
-                        onClick={() => navigate(`/admin/farmers/${farmerId}/ledger`)}>
-                        লেজার
-                      </Button>
+                      <Button size="sm" variant="outline" onClick={() => navigate(`/admin/farmers/${farmerId}/ledger`)}>লেজার</Button>
                     </div>
                   </CardContent>
                 </Card>
@@ -457,55 +333,6 @@ const FarmerDetail = () => {
                 onPageChange={fetchSeasonHistory}
               />
             </div>
-          </TabsContent>
-
-          {/* Payments */}
-          <TabsContent value="payments">
-            <Card>
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <CardTitle>পেমেন্ট ইতিহাস ({payTotalElements}টি)</CardTitle>
-                  <Button size="sm" onClick={() => navigate(`/user/farmers/${farmerId}/payments`)}>
-                    <CreditCard className="w-4 h-4 mr-1" />পরিচালনা
-                  </Button>
-                </div>
-              </CardHeader>
-              <CardContent>
-                {payments.length === 0 ? (
-                  <p className="text-center py-6 text-muted-foreground">কোনো পেমেন্ট নেই।</p>
-                ) : (
-                  <div className="overflow-x-auto">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>তারিখ</TableHead>
-                          <TableHead>পরিমাণ</TableHead>
-                          <TableHead>পদ্ধতি</TableHead>
-                          <TableHead>ধরন</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {payments.map(p => (
-                          <TableRow key={p.id}>
-                            <TableCell>{p.paymentDate}</TableCell>
-                            <TableCell className="font-bold">৳{p.amount.toLocaleString()}</TableCell>
-                            <TableCell><Badge variant="outline">{p.paymentMethod}</Badge></TableCell>
-                            <TableCell><Badge variant={p.paymentType === "PAYMENT" ? "default" : "secondary"}>{p.paymentType}</Badge></TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                    <PaginationBar
-                      currentPage={payCurrentPage}
-                      totalPages={payTotalPages}
-                      totalElements={payTotalElements}
-                      pageSize={PAY_PAGE_SIZE}
-                      onPageChange={fetchPayments}
-                    />
-                  </div>
-                )}
-              </CardContent>
-            </Card>
           </TabsContent>
 
           {/* Personal info */}
