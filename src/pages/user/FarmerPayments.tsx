@@ -7,7 +7,6 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
@@ -20,15 +19,13 @@ import { farmerApi, paymentApi, invoiceApi, ledgerApi } from "@/lib/api/client";
 import type { FarmerDetailResponse } from "@/lib/api/types";
 import { buildReceiptHtml, printReceiptHtml, downloadReceiptAsPng } from "@/lib/invoice/buildReceiptHtml";
 import type { Farmer, Payment } from "@/lib/api/types";
-import { Plus, Loader2, Download, Pencil, Trash2, FileText } from "lucide-react";
+import { Plus, Loader2, Download, Pencil, Trash2, FileText, Image } from "lucide-react";
 import AppNavbar from "@/components/AppNavbar";
 import PumpSelector from "@/components/PumpSelector";
 import PaginationBar from "@/components/PaginationBar";
 import { userNavItems } from "@/lib/navItems";
 
 const PAGE_SIZE = 10;
-
-
 
 const schema = z.object({
   amount: z.number().min(1),
@@ -38,6 +35,14 @@ const schema = z.object({
   paymentType: z.enum(["PAYMENT", "ADJUSTMENT", "DEDUCTION"]),
 });
 type FormData = z.infer<typeof schema>;
+
+const methodLabel: Record<string, string> = { CASH: "নগদ", BANK: "ব্যাংক", MOBILE_BANKING: "মোবাইল ব্যাংকিং" };
+const methodColor: Record<string, string> = {
+  CASH: "bg-green-500 text-white",
+  BANK: "bg-blue-500 text-white",
+  MOBILE_BANKING: "bg-pink-500 text-white",
+};
+const typeLabel: Record<string, string> = { PAYMENT: "পেমেন্ট", ADJUSTMENT: "সমন্বয়", DEDUCTION: "কর্তন" };
 
 const FarmerPayments = () => {
   const { farmerId } = useParams<{ farmerId: string }>();
@@ -63,7 +68,13 @@ const FarmerPayments = () => {
 
   const form = useForm<FormData>({
     resolver: zodResolver(schema),
-    defaultValues: { amount: undefined, paymentDate: new Date().toISOString().split("T")[0], paymentMethod: "CASH" as const, paymentType: "PAYMENT" as const, transactionReference: "" },
+    defaultValues: {
+      amount: undefined,
+      paymentDate: new Date().toISOString().split("T")[0],
+      paymentMethod: "CASH" as const,
+      paymentType: "PAYMENT" as const,
+      transactionReference: "",
+    },
   });
 
   useEffect(() => {
@@ -91,18 +102,30 @@ const FarmerPayments = () => {
       setTotalPages(result.totalPages);
       setTotalElements(result.totalElements);
       setFarmerDetail(detail);
-    } catch { toast({ title: "Error", variant: "destructive" }); }
-    finally { setLoading(false); }
+    } catch {
+      toast({ title: "Error", variant: "destructive" });
+    } finally {
+      setLoading(false);
+    }
   };
 
   const onSubmit = async (data: FormData) => {
     setSubmitting(true);
     try {
-      await paymentApi.create(parseInt(farmerId!), { ...(data as Required<FormData>), transactionReference: data.transactionReference || undefined }, selectedSeason?.id);
+      await paymentApi.create(
+        parseInt(farmerId!),
+        { ...(data as Required<FormData>), transactionReference: data.transactionReference || undefined },
+        selectedSeason?.id,
+      );
       toast({ title: "পেমেন্ট রেকর্ড হয়েছে" });
-      form.reset(); setShowForm(false); fetchData(0);
-    } catch (e: any) { toast({ title: "Error", description: e.message, variant: "destructive" }); }
-    finally { setSubmitting(false); }
+      form.reset();
+      setShowForm(false);
+      fetchData(0);
+    } catch (e: any) {
+      toast({ title: "Error", description: e.message, variant: "destructive" });
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const handleUpdate = async () => {
@@ -111,9 +134,13 @@ const FarmerPayments = () => {
     try {
       await paymentApi.update(editing.id, { amount: editing.amount, reason: editing.reason });
       toast({ title: "আপডেট সফল" });
-      setEditing(null); fetchData(currentPage);
-    } catch (e: any) { toast({ title: "Error", description: e.message, variant: "destructive" }); }
-    finally { setBusy(false); }
+      setEditing(null);
+      fetchData(currentPage);
+    } catch (e: any) {
+      toast({ title: "Error", description: e.message, variant: "destructive" });
+    } finally {
+      setBusy(false);
+    }
   };
 
   const handleDelete = async () => {
@@ -122,9 +149,13 @@ const FarmerPayments = () => {
     try {
       await paymentApi.delete(deleting.id);
       toast({ title: "মুছে ফেলা হয়েছে" });
-      setDeleting(null); fetchData(currentPage);
-    } catch (e: any) { toast({ title: "Error", description: e.message, variant: "destructive" }); }
-    finally { setBusy(false); }
+      setDeleting(null);
+      fetchData(currentPage);
+    } catch (e: any) {
+      toast({ title: "Error", description: e.message, variant: "destructive" });
+    } finally {
+      setBusy(false);
+    }
   };
 
   const handleDownloadInvoice = async (payment: Payment) => {
@@ -174,7 +205,10 @@ const FarmerPayments = () => {
     setDownloadingPngId(payment.id);
     try {
       const id = parseInt(farmerId!);
-      const [invoiceData, ledger] = await Promise.all([invoiceApi.get(payment.id), ledgerApi.getLedger(id)]);
+      const [invoiceData, ledger] = await Promise.all([
+        invoiceApi.get(payment.id),
+        ledgerApi.getLedger(id),
+      ]);
       const pumpBn = pumps.find((p) => p.id === pumpId)?.pumpNameBengali;
       const selectedEntry = ledger.seasons.find((s) => s.seasonId === selectedSeason?.id);
       const html = await buildReceiptHtml({
@@ -187,12 +221,17 @@ const FarmerPayments = () => {
         farmerCode: invoiceData.farmer.identifier,
         seasonName: selectedSeason?.seasonName ?? invoiceData.season.name ?? "",
         year: selectedSeason?.year ?? invoiceData.season.year ?? new Date().getFullYear(),
-        payment: { amount: invoiceData.payment.amount, date: invoiceData.payment.paidAt, method: invoiceData.payment.method },
+        payment: {
+          amount: invoiceData.payment.amount,
+          date: invoiceData.payment.paidAt,
+          method: invoiceData.payment.method,
+        },
         lands: invoiceData.lands,
         totalLandShatak: farmerDetail?.totalLandSizeShatak ?? undefined,
         selectedSeasonTotal: selectedEntry?.billed ?? farmerDetail?.calculatedCost ?? 0,
         selectedSeasonDue: selectedEntry?.outstanding ?? farmerDetail?.dueAmount ?? 0,
-        otherSeasonDues: ledger.seasons.filter((s) => s.seasonId !== selectedSeason?.id && s.outstanding > 0)
+        otherSeasonDues: ledger.seasons
+          .filter((s) => s.seasonId !== selectedSeason?.id && s.outstanding > 0)
           .map((s) => ({ seasonName: s.seasonName, year: s.year, due: s.outstanding })),
         farmerPortalUrl: `https://www.irripump.com/farmer?code=${invoiceData.farmer.identifier}`,
       });
@@ -245,29 +284,56 @@ const FarmerPayments = () => {
     }
   };
 
-  const methodLabel: Record<string, string> = { CASH: "নগদ", BANK: "ব্যাংক", MOBILE_BANKING: "মোবাইল ব্যাংকিং" };
-  const methodColor: Record<string, string> = { CASH: "bg-green-500", BANK: "bg-blue-500", MOBILE_BANKING: "bg-pink-500" };
-  const methodBadge = (m: string) => <Badge className={methodColor[m] || ""}>{methodLabel[m] || m}</Badge>;
-
   if (isLoading || loading) {
-    return <div className="min-h-screen flex items-center justify-center"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div></div>;
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary" />
+      </div>
+    );
   }
+
+  const due = farmerDetail?.dueAmount ?? 0;
+  const advance = farmerDetail?.advanceAmount ?? 0;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-primary/10 via-background to-accent/10">
       <AppNavbar
         title={`${farmer?.nameBengali || "কৃষক"} — পেমেন্ট`}
-        subtitle={`${farmer?.farmerCode || ""}`}
+        subtitle={farmer?.farmerCode ?? ""}
         navItems={userNavItems}
         rightContent={
           <div className="flex flex-wrap gap-2 items-center">
             <PumpSelector />
-            <Button size="sm" onClick={() => setShowForm(!showForm)}><Plus className="w-4 h-4 mr-1" />পেমেন্ট</Button>
+            <Button size="sm" onClick={() => setShowForm(!showForm)}>
+              <Plus className="w-4 h-4 mr-1" />পেমেন্ট
+            </Button>
           </div>
         }
       />
 
-      <main className="max-w-7xl mx-auto p-4 md:p-6 space-y-6">
+      <main className="max-w-3xl mx-auto p-4 md:p-6 space-y-4">
+
+        {/* Season summary strip */}
+        {farmerDetail && selectedSeason && (
+          <div className="grid grid-cols-3 gap-3">
+            <div className="rounded-xl border bg-card p-3 text-center">
+              <p className="text-xs text-muted-foreground mb-1">মৌসুম বিল</p>
+              <p className="text-base font-bold">৳{(farmerDetail.calculatedCost ?? 0).toLocaleString()}</p>
+            </div>
+            <div className="rounded-xl border bg-card p-3 text-center">
+              <p className="text-xs text-muted-foreground mb-1">মোট পরিশোধ</p>
+              <p className="text-base font-bold text-green-600">৳{(farmerDetail.totalPaid ?? 0).toLocaleString()}</p>
+            </div>
+            <div className="rounded-xl border bg-card p-3 text-center">
+              <p className="text-xs text-muted-foreground mb-1">{due > 0 ? "বকেয়া" : "অগ্রিম"}</p>
+              <p className={`text-base font-bold ${due > 0 ? "text-destructive" : "text-green-600"}`}>
+                ৳{(due > 0 ? due : advance).toLocaleString()}
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* New payment form */}
         {showForm && (
           <Card>
             <CardHeader><CardTitle>নতুন পেমেন্ট</CardTitle></CardHeader>
@@ -275,17 +341,65 @@ const FarmerPayments = () => {
               <Form {...form}>
                 <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <FormField control={form.control} name="amount" render={({ field }) => (<FormItem><FormLabel>পরিমাণ (৳)</FormLabel><FormControl><Input type="number" {...field} onChange={(e) => field.onChange(e.target.value === "" ? undefined : parseFloat(e.target.value))} /></FormControl><FormMessage /></FormItem>)} />
-                    <FormField control={form.control} name="paymentDate" render={({ field }) => (<FormItem><FormLabel>তারিখ</FormLabel><FormControl><Input type="date" {...field} /></FormControl><FormMessage /></FormItem>)} />
-                    <FormField control={form.control} name="paymentMethod" render={({ field }) => (<FormItem><FormLabel>পদ্ধতি</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl><SelectContent><SelectItem value="CASH">নগদ</SelectItem><SelectItem value="BANK">ব্যাংক</SelectItem><SelectItem value="MOBILE_BANKING">মোবাইল ব্যাংকিং</SelectItem></SelectContent></Select><FormMessage /></FormItem>)} />
+                    <FormField control={form.control} name="amount" render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>পরিমাণ (৳)</FormLabel>
+                        <FormControl>
+                          <Input type="number" {...field} onChange={(e) => field.onChange(e.target.value === "" ? undefined : parseFloat(e.target.value))} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )} />
+                    <FormField control={form.control} name="paymentDate" render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>তারিখ</FormLabel>
+                        <FormControl><Input type="date" {...field} /></FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )} />
+                    <FormField control={form.control} name="paymentMethod" render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>পদ্ধতি</FormLabel>
+                        <Select onValueChange={field.onChange} defaultValue={field.value}>
+                          <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
+                          <SelectContent>
+                            <SelectItem value="CASH">নগদ</SelectItem>
+                            <SelectItem value="BANK">ব্যাংক</SelectItem>
+                            <SelectItem value="MOBILE_BANKING">মোবাইল ব্যাংকিং</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )} />
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <FormField control={form.control} name="paymentType" render={({ field }) => (<FormItem><FormLabel>ধরন</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl><SelectContent><SelectItem value="PAYMENT">পেমেন্ট</SelectItem><SelectItem value="ADJUSTMENT">সমন্বয়</SelectItem><SelectItem value="DEDUCTION">কর্তন</SelectItem></SelectContent></Select><FormMessage /></FormItem>)} />
-                    <FormField control={form.control} name="transactionReference" render={({ field }) => (<FormItem><FormLabel>Transaction Ref</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} />
+                    <FormField control={form.control} name="paymentType" render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>ধরন</FormLabel>
+                        <Select onValueChange={field.onChange} defaultValue={field.value}>
+                          <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
+                          <SelectContent>
+                            <SelectItem value="PAYMENT">পেমেন্ট</SelectItem>
+                            <SelectItem value="ADJUSTMENT">সমন্বয়</SelectItem>
+                            <SelectItem value="DEDUCTION">কর্তন</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )} />
+                    <FormField control={form.control} name="transactionReference" render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Transaction Ref</FormLabel>
+                        <FormControl><Input {...field} /></FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )} />
                   </div>
                   <div className="flex gap-2 justify-end">
                     <Button type="button" variant="outline" onClick={() => setShowForm(false)}>বাতিল</Button>
-                    <Button type="submit" disabled={submitting}>{submitting && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}সংরক্ষণ</Button>
+                    <Button type="submit" disabled={submitting}>
+                      {submitting && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}সংরক্ষণ
+                    </Button>
                   </div>
                 </form>
               </Form>
@@ -293,94 +407,165 @@ const FarmerPayments = () => {
           </Card>
         )}
 
+        {/* Payment list */}
         <Card>
           <CardHeader>
             <div className="flex items-center justify-between flex-wrap gap-2">
               <CardTitle>পেমেন্ট ইতিহাস ({totalElements}টি)</CardTitle>
-              <Button variant="outline" size="sm" onClick={handleDownloadPaymentList} disabled={downloadingList || payments.length === 0}>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleDownloadPaymentList}
+                disabled={downloadingList || payments.length === 0}
+              >
                 {downloadingList ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <FileText className="w-4 h-4 mr-2" />}
-                পেমেন্ট তালিকা
+                তালিকা প্রিন্ট
               </Button>
             </div>
           </CardHeader>
-          <CardContent>
+          <CardContent className="p-0">
             {payments.length === 0 ? (
-              <div className="text-center py-8 text-muted-foreground">কোনো পেমেন্ট নেই।</div>
+              <div className="text-center py-12 text-muted-foreground">কোনো পেমেন্ট নেই।</div>
             ) : (
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>তারিখ</TableHead>
-                      <TableHead>পরিমাণ</TableHead>
-                      <TableHead className="hidden md:table-cell">পদ্ধতি</TableHead>
-                      <TableHead className="hidden md:table-cell">ধরন</TableHead>
-                      <TableHead className="hidden md:table-cell">Ref</TableHead>
-                      <TableHead>অ্যাকশন</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {payments.map((p) => (
-                      <TableRow key={p.id}>
-                        <TableCell>{p.paymentDate}</TableCell>
-                        <TableCell className="font-bold">৳{p.amount.toLocaleString()}</TableCell>
-                        <TableCell className="hidden md:table-cell">{methodBadge(p.paymentMethod)}</TableCell>
-                        <TableCell className="hidden md:table-cell"><Badge variant="outline">{p.paymentType}</Badge></TableCell>
-                        <TableCell className="hidden md:table-cell font-mono text-xs">{p.transactionReference || "-"}</TableCell>
-                        <TableCell>
-                          <div className="flex gap-1">
-                            <Button size="icon" variant="outline" className="h-8 w-8" title="রসিদ প্রিন্ট" onClick={() => handleDownloadInvoice(p)} disabled={downloadingId === p.id}>
-                              {downloadingId === p.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
-                            </Button>
-                            <Button size="icon" variant="outline" className="h-8 w-8" title="PNG ডাউনলোড" onClick={() => handleDownloadInvoicePng(p)} disabled={downloadingPngId === p.id}>
-                              {downloadingPngId === p.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FileText className="w-3.5 h-3.5" />}
-                            </Button>
-                            <Button size="icon" variant="outline" className="h-8 w-8" onClick={() => setEditing({ id: p.id, amount: p.amount, reason: "" })}><Pencil className="w-3.5 h-3.5" /></Button>
-                            <Button size="icon" variant="outline" className="h-8 w-8 text-destructive" onClick={() => setDeleting(p)}><Trash2 className="w-3.5 h-3.5" /></Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-                <PaginationBar
-                  currentPage={currentPage}
-                  totalPages={totalPages}
-                  totalElements={totalElements}
-                  pageSize={PAGE_SIZE}
-                  onPageChange={fetchData}
-                />
+              <div>
+                {payments.map((p, i) => (
+                  <div
+                    key={p.id}
+                    className={`px-4 py-3 ${i < payments.length - 1 ? "border-b" : ""} ${p.isReversed ? "opacity-50" : ""}`}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      {/* Left: amount + date */}
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className={`text-lg font-bold ${p.isReversed ? "line-through text-muted-foreground" : "text-foreground"}`}>
+                            ৳{p.amount.toLocaleString()}
+                          </span>
+                          <Badge className={`${methodColor[p.paymentMethod] || ""} text-xs`}>
+                            {methodLabel[p.paymentMethod] || p.paymentMethod}
+                          </Badge>
+                          {p.paymentType !== "PAYMENT" && (
+                            <Badge variant="outline" className="text-xs">
+                              {typeLabel[p.paymentType] || p.paymentType}
+                            </Badge>
+                          )}
+                          {p.isReversed && <Badge variant="destructive" className="text-xs">বাতিল</Badge>}
+                        </div>
+                        <p className="text-sm text-muted-foreground mt-0.5">{p.paymentDate}</p>
+                        {p.transactionReference && (
+                          <p className="text-xs text-muted-foreground font-mono mt-0.5">Ref: {p.transactionReference}</p>
+                        )}
+                      </div>
+
+                      {/* Right: action buttons */}
+                      {!p.isReversed && (
+                        <div className="flex gap-1 shrink-0">
+                          <Button
+                            size="icon"
+                            variant="outline"
+                            className="h-8 w-8"
+                            title="রসিদ প্রিন্ট"
+                            onClick={() => handleDownloadInvoice(p)}
+                            disabled={downloadingId === p.id}
+                          >
+                            {downloadingId === p.id
+                              ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                              : <Download className="w-3.5 h-3.5" />}
+                          </Button>
+                          <Button
+                            size="icon"
+                            variant="outline"
+                            className="h-8 w-8"
+                            title="PNG ডাউনলোড"
+                            onClick={() => handleDownloadInvoicePng(p)}
+                            disabled={downloadingPngId === p.id}
+                          >
+                            {downloadingPngId === p.id
+                              ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                              : <Image className="w-3.5 h-3.5" />}
+                          </Button>
+                          <Button
+                            size="icon"
+                            variant="outline"
+                            className="h-8 w-8"
+                            onClick={() => setEditing({ id: p.id, amount: p.amount, reason: "" })}
+                          >
+                            <Pencil className="w-3.5 h-3.5" />
+                          </Button>
+                          <Button
+                            size="icon"
+                            variant="outline"
+                            className="h-8 w-8 text-destructive"
+                            onClick={() => setDeleting(p)}
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+                <div className="px-4 pb-3">
+                  <PaginationBar
+                    currentPage={currentPage}
+                    totalPages={totalPages}
+                    totalElements={totalElements}
+                    pageSize={PAGE_SIZE}
+                    onPageChange={fetchData}
+                  />
+                </div>
               </div>
             )}
           </CardContent>
         </Card>
       </main>
 
+      {/* Edit dialog */}
       <Dialog open={!!editing} onOpenChange={(o) => !o && setEditing(null)}>
         <DialogContent>
           <DialogHeader><DialogTitle>পেমেন্ট সংশোধন</DialogTitle></DialogHeader>
           {editing && (
             <div className="space-y-3">
-              <div><Label>পরিমাণ</Label><Input type="number" value={editing.amount} onChange={(e) => setEditing({ ...editing, amount: e.target.value === "" ? undefined : parseFloat(e.target.value) })} /></div>
-              <div><Label>কারণ (Reason)</Label><Input value={editing.reason} onChange={(e) => setEditing({ ...editing, reason: e.target.value })} placeholder="সংশোধনের কারণ লিখুন" /></div>
+              <div>
+                <Label>পরিমাণ</Label>
+                <Input
+                  type="number"
+                  value={editing.amount}
+                  onChange={(e) => setEditing({ ...editing, amount: e.target.value === "" ? 0 : parseFloat(e.target.value) })}
+                />
+              </div>
+              <div>
+                <Label>কারণ (Reason)</Label>
+                <Input
+                  value={editing.reason}
+                  onChange={(e) => setEditing({ ...editing, reason: e.target.value })}
+                  placeholder="সংশোধনের কারণ লিখুন"
+                />
+              </div>
             </div>
           )}
           <DialogFooter>
             <Button variant="outline" onClick={() => setEditing(null)}>বাতিল</Button>
-            <Button onClick={handleUpdate} disabled={busy || !editing?.reason}>{busy && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}সংরক্ষণ</Button>
+            <Button onClick={handleUpdate} disabled={busy || !editing?.reason}>
+              {busy && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}সংরক্ষণ
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
+      {/* Delete confirm */}
       <AlertDialog open={!!deleting} onOpenChange={(o) => !o && setDeleting(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>পেমেন্ট মুছতে চান?</AlertDialogTitle>
-            <AlertDialogDescription>৳{deleting?.amount} ({deleting?.paymentDate}) মুছে যাবে।</AlertDialogDescription>
+            <AlertDialogDescription>
+              ৳{deleting?.amount} ({deleting?.paymentDate}) মুছে যাবে।
+            </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>বাতিল</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDelete} disabled={busy} className="bg-destructive text-destructive-foreground">মুছুন</AlertDialogAction>
+            <AlertDialogAction onClick={handleDelete} disabled={busy} className="bg-destructive text-destructive-foreground">
+              মুছুন
+            </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
