@@ -18,8 +18,9 @@ import { usePumpContext } from "@/contexts/PumpContext";
 import { farmerApi, paymentApi, invoiceApi, ledgerApi } from "@/lib/api/client";
 import type { FarmerDetailResponse } from "@/lib/api/types";
 import { buildReceiptHtml, printReceiptHtml, downloadReceiptAsPng } from "@/lib/invoice/buildReceiptHtml";
+import { thermalPrintReceipt } from "@/lib/invoice/thermalPrinter";
 import type { Farmer, Payment } from "@/lib/api/types";
-import { Plus, Loader2, Download, Pencil, Trash2, FileText, Image } from "lucide-react";
+import { Plus, Loader2, Download, Pencil, Trash2, FileText, Image, Printer } from "lucide-react";
 import AppNavbar from "@/components/AppNavbar";
 import PumpSelector from "@/components/PumpSelector";
 import PaginationBar from "@/components/PaginationBar";
@@ -56,6 +57,7 @@ const FarmerPayments = () => {
   const [submitting, setSubmitting] = useState(false);
   const [downloadingId, setDownloadingId] = useState<number | null>(null);
   const [downloadingPngId, setDownloadingPngId] = useState<number | null>(null);
+  const [thermalPrintingId, setThermalPrintingId] = useState<number | null>(null);
   const [downloadingList, setDownloadingList] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<{ id: number; amount: number; reason: string } | null>(null);
@@ -241,6 +243,49 @@ const FarmerPayments = () => {
       toast({ title: "Error", description: e.message || "Failed to download PNG", variant: "destructive" });
     } finally {
       setDownloadingPngId(null);
+    }
+  };
+
+  const handleThermalPrint = async (payment: Payment) => {
+    setThermalPrintingId(payment.id);
+    try {
+      const id = parseInt(farmerId!);
+      const [invoiceData, ledger] = await Promise.all([
+        invoiceApi.get(payment.id),
+        ledgerApi.getLedger(id),
+      ]);
+      const pumpBn = pumps.find((p) => p.id === pumpId)?.pumpNameBengali;
+      const selectedEntry = ledger.seasons.find((s) => s.seasonId === selectedSeason?.id);
+      const html = await buildReceiptHtml({
+        mode: "single",
+        invoiceNo: invoiceData.invoiceNo,
+        issuedAt: new Date().toISOString(),
+        pumpName: invoiceData.pump.name,
+        pumpNameBengali: pumpBn,
+        farmerName: farmer?.nameBengali ?? invoiceData.farmer.name,
+        farmerCode: invoiceData.farmer.identifier,
+        seasonName: selectedSeason?.seasonName ?? invoiceData.season.name ?? "",
+        year: selectedSeason?.year ?? invoiceData.season.year ?? new Date().getFullYear(),
+        payment: {
+          amount: invoiceData.payment.amount,
+          date: invoiceData.payment.paidAt,
+          method: invoiceData.payment.method,
+        },
+        lands: invoiceData.lands,
+        totalLandShatak: farmerDetail?.totalLandSizeShatak ?? undefined,
+        selectedSeasonTotal: selectedEntry?.billed ?? farmerDetail?.calculatedCost ?? 0,
+        selectedSeasonDue: selectedEntry?.outstanding ?? farmerDetail?.dueAmount ?? 0,
+        otherSeasonDues: ledger.seasons
+          .filter((s) => s.seasonId !== selectedSeason?.id && s.outstanding > 0)
+          .map((s) => ({ seasonName: s.seasonName, year: s.year, due: s.outstanding })),
+        farmerPortalUrl: `https://www.irripump.com/farmer?code=${invoiceData.farmer.identifier}`,
+      });
+      await thermalPrintReceipt(html);
+      toast({ title: "থার্মাল প্রিন্ট হচ্ছে..." });
+    } catch (e: any) {
+      toast({ title: "প্রিন্ট ব্যর্থ", description: e.message || "থার্মাল প্রিন্টার সংযুক্ত হয়নি", variant: "destructive" });
+    } finally {
+      setThermalPrintingId(null);
     }
   };
 
@@ -482,6 +527,18 @@ const FarmerPayments = () => {
                             {downloadingPngId === p.id
                               ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
                               : <Image className="w-3.5 h-3.5" />}
+                          </Button>
+                          <Button
+                            size="icon"
+                            variant="outline"
+                            className="h-8 w-8"
+                            title="থার্মাল প্রিন্টার (BLE)"
+                            onClick={() => handleThermalPrint(p)}
+                            disabled={thermalPrintingId === p.id}
+                          >
+                            {thermalPrintingId === p.id
+                              ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                              : <Printer className="w-3.5 h-3.5" />}
                           </Button>
                           <Button
                             size="icon"
