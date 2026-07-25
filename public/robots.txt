@@ -4,5 +4,6 @@ Disallow: /admin/
 Disallow: /user/
 Disallow: /auth
 Disallow: /login
+Disallow: /farmer
 
 Sitemap: https://irripump.com/sitemap.xml
