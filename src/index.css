@@ -1,3 +1,5 @@
+/* Cache-bust: forces a new hashed CSS filename so browsers that cached
+   the temporary www<->apex redirect loop (PRs #17-#20) stop replaying it. */
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
