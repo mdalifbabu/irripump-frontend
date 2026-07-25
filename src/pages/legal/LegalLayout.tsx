@@ -34,9 +34,9 @@ export default function LegalLayout({ title, effectiveDate, children }: LegalLay
         <div className="flex items-start gap-3 bg-amber-50 border border-amber-200 rounded-xl p-4 mb-8">
           <AlertTriangle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
           <div className="text-sm text-amber-800 leading-relaxed">
-            <strong>DRAFT TEMPLATE — must be reviewed by a qualified lawyer before publishing.</strong>{" "}
-            This document is not legal advice. All <strong>[BRACKETED PLACEHOLDERS]</strong> must be
-            replaced with accurate information by IRRIPUMP before this page goes live.
+            <strong>Should be reviewed by a qualified lawyer.</strong>{" "}
+            This document is not legal advice — it's a template filled in with IRRIPUMP's business
+            details. Confirm it meets applicable Bangladesh law before relying on it.
           </div>
         </div>
 

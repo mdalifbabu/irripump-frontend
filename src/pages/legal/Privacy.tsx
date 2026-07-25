@@ -2,11 +2,11 @@ import LegalLayout from "./LegalLayout";
 
 export default function Privacy() {
   return (
-    <LegalLayout title="Privacy Policy" effectiveDate="[Effective Date]">
+    <LegalLayout title="Privacy Policy" effectiveDate="July 25, 2026">
       <p>
-        This Privacy Policy explains how <strong>[Legal Business Name]</strong> ("IRRIPUMP", "we",
-        "us", or "our"), registered at <strong>[Registered Address]</strong>, collects, uses, stores,
-        and protects information when you use the irripump platform.
+        This Privacy Policy explains how <strong>Irripump Software Ltd.</strong> ("IRRIPUMP", "we",
+        "us", or "our"), registered at <strong>Chakalma, Kundarhat-5860, Nadigram, Bogura, Bangladesh</strong>,
+        collects, uses, stores, and protects information when you use the irripump platform.
       </p>
 
       <h2>1. What Data We Collect</h2>
@@ -64,7 +64,7 @@ export default function Privacy() {
       <h2>5. Data Retention</h2>
       <p>
         We retain your account data for as long as your account is active. Operational data (farmer
-        records, payment history) is retained for <strong>[RETENTION PERIOD — e.g. 5 years]</strong>
+        records, payment history) is retained for <strong>5 years</strong>
         after account closure, unless you request deletion earlier. Audit log data may be retained
         longer for security and compliance purposes.
       </p>
@@ -78,7 +78,7 @@ export default function Privacy() {
         <li>Request a copy of your data in a portable format.</li>
       </ul>
       <p>
-        To exercise these rights, contact us at <strong>[Contact Email]</strong>. We will respond
+        To exercise these rights, contact us at <strong>info@irripump.com</strong>. We will respond
         within a reasonable time.
       </p>
 
@@ -106,9 +106,9 @@ export default function Privacy() {
       <h2>10. Contact for Privacy Requests</h2>
       <p>For all privacy-related requests or questions:</p>
       <ul>
-        <li><strong>[Legal Business Name]</strong></li>
-        <li><strong>[Registered Address]</strong></li>
-        <li>Email: <strong>[Contact Email]</strong></li>
+        <li><strong>Irripump Software Ltd.</strong></li>
+        <li><strong>Chakalma, Kundarhat-5860, Nadigram, Bogura, Bangladesh</strong></li>
+        <li>Email: <strong>info@irripump.com</strong></li>
       </ul>
     </LegalLayout>
   );

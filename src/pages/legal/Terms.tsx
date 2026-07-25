@@ -2,11 +2,11 @@ import LegalLayout from "./LegalLayout";
 
 export default function Terms() {
   return (
-    <LegalLayout title="Terms & Conditions" effectiveDate="[Effective Date]">
+    <LegalLayout title="Terms & Conditions" effectiveDate="July 25, 2026">
       <p>
         These Terms and Conditions ("Terms") govern your access to and use of the irripump platform,
-        operated by <strong>[Legal Business Name]</strong> ("IRRIPUMP", "we", "us", or "our"),
-        registered at <strong>[Registered Address]</strong>.
+        operated by <strong>Irripump Software Ltd.</strong> ("IRRIPUMP", "we", "us", or "our"),
+        registered at <strong>Chakalma, Kundarhat-5860, Nadigram, Bogura, Bangladesh</strong>.
       </p>
       <p>
         By creating an account or using any part of the irripump service, you agree to be bound by
@@ -39,7 +39,7 @@ export default function Terms() {
       <p>
         You are responsible for maintaining the confidentiality of your login credentials and for all
         activity that occurs under your account. You must notify us immediately at{" "}
-        <strong>[Contact Email]</strong> if you become aware of any unauthorized use.
+        <strong>info@irripump.com</strong> if you become aware of any unauthorized use.
       </p>
 
       <h2>3. Acceptable Use</h2>
@@ -64,7 +64,7 @@ export default function Terms() {
       <h2>5. Intellectual Property</h2>
       <p>
         The irripump platform, including its software, design, and documentation, is the intellectual
-        property of <strong>[Legal Business Name]</strong>. You are granted a limited, non-exclusive,
+        property of <strong>Irripump Software Ltd.</strong> You are granted a limited, non-exclusive,
         non-transferable licence to use the service during your subscription period. No ownership
         rights are transferred to you.
       </p>
@@ -92,7 +92,7 @@ export default function Terms() {
       <h2>8. Termination</h2>
       <p>
         We reserve the right to suspend or terminate your account at any time if you breach these
-        Terms. You may terminate your account by contacting us at <strong>[Contact Email]</strong>.
+        Terms. You may terminate your account by contacting us at <strong>info@irripump.com</strong>.
         Upon termination, your data may be retained for a period as described in our Privacy Policy
         before deletion.
       </p>
@@ -107,7 +107,7 @@ export default function Terms() {
       <h2>10. Governing Law</h2>
       <p>
         These Terms are governed by the laws of <strong>Bangladesh</strong>. Any disputes shall be
-        subject to the exclusive jurisdiction of the courts of <strong>[Jurisdiction, Bangladesh]</strong>.
+        subject to the exclusive jurisdiction of the courts of <strong>Bogura, Bangladesh</strong>.
       </p>
 
       <h2>11. Contact</h2>
@@ -115,9 +115,9 @@ export default function Terms() {
         For questions about these Terms, contact us at:
       </p>
       <ul>
-        <li><strong>[Legal Business Name]</strong></li>
-        <li><strong>[Registered Address]</strong></li>
-        <li>Email: <strong>[Contact Email]</strong></li>
+        <li><strong>Irripump Software Ltd.</strong></li>
+        <li><strong>Chakalma, Kundarhat-5860, Nadigram, Bogura, Bangladesh</strong></li>
+        <li>Email: <strong>info@irripump.com</strong></li>
       </ul>
     </LegalLayout>
   );

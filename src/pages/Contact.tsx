@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { Droplet, ArrowLeft, Mail, MapPin, Send, CheckCircle2 } from "lucide-react";
 
-const CONTACT_EMAIL = "mdalifbabu.0x@gmail.com";
+const CONTACT_EMAIL = "contact@irripump.com";
 
 export default function Contact() {
   const [sent, setSent] = useState(false);
@@ -73,14 +73,13 @@ export default function Contact() {
                   </div>
                 </a>
 
-                {/* Phone placeholder — update with real number */}
                 <div className="flex items-center gap-3 text-stone-400">
                   <div className="w-10 h-10 rounded-xl bg-stone-50 flex items-center justify-center">
                     <MapPin className="w-5 h-5 text-stone-300" />
                   </div>
                   <div>
                     <p className="text-xs text-stone-400 mb-0.5">Address</p>
-                    <p className="text-sm">CHAKALMA, NANDIGRAM<br />BOGURA, BANGLADESH</p>
+                    <p className="text-sm">CHAKALMA, KUNDARHAT-5860<br />NADIGRAM, BOGURA, BANGLADESH</p>
                   </div>
                 </div>
               </div>
