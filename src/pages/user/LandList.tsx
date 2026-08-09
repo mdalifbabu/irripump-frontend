@@ -23,7 +23,10 @@ import type { SeasonLandEnrollmentResponse, FarmerLandAssignment, Farmer, Land }
 import { Plus, Loader2, MapPin, Users, Link, Unlink, UserPlus, X } from "lucide-react";
 import AppNavbar from "@/components/AppNavbar";
 import PumpSelector from "@/components/PumpSelector";
+import PaginationBar from "@/components/PaginationBar";
 import { userNavItems } from "@/lib/navItems";
+
+const LAND_PAGE_SIZE = 20;
 
 const createSchema = z.object({
   landmarkNumber: z.string().min(1, "দাগ/খতিয়ান নম্বর প্রয়োজন"),
@@ -41,6 +44,8 @@ type CreateForm = z.infer<typeof createSchema>;
 const LandList = () => {
   const [enrolled, setEnrolled] = useState<SeasonLandEnrollmentResponse[]>([]);
   const [enrolledLoading, setEnrolledLoading] = useState(false);
+  const [landPage, setLandPage] = useState(0);
+  const [landSearch, setLandSearch] = useState("");
 
   // "Add to season" dialog — existing-or-new picker, mirroring the farmer enroll dialog
   const [showEnrollDialog, setShowEnrollDialog] = useState(false);
@@ -234,6 +239,13 @@ const LandList = () => {
     finally { setBusy(false); }
   };
 
+  const filteredEnrolled = enrolled.filter(e => {
+    const q = landSearch.toLowerCase();
+    return !q || e.landmarkNumber.toLowerCase().includes(q);
+  });
+  const landTotalPages = Math.ceil(filteredEnrolled.length / LAND_PAGE_SIZE);
+  const pagedEnrolled = filteredEnrolled.slice(landPage * LAND_PAGE_SIZE, (landPage + 1) * LAND_PAGE_SIZE);
+
   const filteredAvailable = available.filter(l => {
     const q = enrollSearch.toLowerCase();
     return !q || l.landmarkNumber.toLowerCase().includes(q) || (l.tag ?? "").toLowerCase().includes(q);
@@ -272,8 +284,16 @@ const LandList = () => {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <MapPin className="w-5 h-5" />
-                নথিভুক্ত জমি — {season}/{year} ({enrolled.length})
+                নথিভুক্ত জমি — {season}/{year} ({filteredEnrolled.length})
               </CardTitle>
+              {enrolled.length > 0 && (
+                <Input
+                  placeholder="দাগ নং দিয়ে খুঁজুন..."
+                  value={landSearch}
+                  onChange={(e) => { setLandSearch(e.target.value); setLandPage(0); }}
+                  className="mt-2 max-w-xs"
+                />
+              )}
             </CardHeader>
             <CardContent>
               {enrolledLoading ? (
@@ -296,7 +316,7 @@ const LandList = () => {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {enrolled.map((e) => {
+                      {pagedEnrolled.map((e) => {
                         const asgn = getAssignment(e.landId);
                         return (
                           <TableRow key={e.enrollmentId}>
@@ -336,6 +356,13 @@ const LandList = () => {
                       })}
                     </TableBody>
                   </Table>
+                  <PaginationBar
+                    currentPage={landPage}
+                    totalPages={landTotalPages}
+                    totalElements={filteredEnrolled.length}
+                    pageSize={LAND_PAGE_SIZE}
+                    onPageChange={setLandPage}
+                  />
                 </div>
               )}
             </CardContent>

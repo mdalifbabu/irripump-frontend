@@ -32,6 +32,7 @@ import AdminFarmerLedger from "./pages/admin/AdminFarmerLedger";
 
 // User pages
 import FarmerList from "./pages/user/FarmerList";
+import FarmerMasterList from "./pages/user/FarmerMasterList";
 import CreateFarmer from "./pages/user/CreateFarmer";
 import FarmerDetail from "./pages/user/FarmerDetail";
 import FarmerPayments from "./pages/user/FarmerPayments";
@@ -80,6 +81,7 @@ const App = () => (
               {/* User Routes */}
               <Route path="/user/dashboard" element={<ProtectedRoute role="USER"><UserDashboard /></ProtectedRoute>} />
               <Route path="/user/farmers" element={<ProtectedRoute role="USER"><FarmerList /></ProtectedRoute>} />
+              <Route path="/user/farmers/master-list" element={<ProtectedRoute role="USER"><FarmerMasterList /></ProtectedRoute>} />
               <Route path="/user/farmers/create" element={<ProtectedRoute role="USER"><CreateFarmer /></ProtectedRoute>} />
               <Route path="/user/farmers/:farmerId" element={<ProtectedRoute role="USER"><FarmerDetail /></ProtectedRoute>} />
               <Route path="/user/farmers/:farmerId/payments" element={<ProtectedRoute role="USER"><FarmerPayments /></ProtectedRoute>} />
