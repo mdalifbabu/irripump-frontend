@@ -5,7 +5,7 @@ import type {
   CreateUnitPriceRequest, UpdateUnitPriceRequest, CreatePaymentRequest, UpdatePaymentRequest,
   VerifyFarmerCodeRequest, FarmerLandAssignment, Season,
   AssignLandRequest, FarmerSummaryResponse, FarmerDetailResponse, CreateSeasonRequest,
-  SeasonEnrollmentResponse, SeasonDashboard, LedgerResponse,
+  SeasonEnrollmentResponse, SeasonLandEnrollmentResponse, SeasonDashboard, LedgerResponse,
   AdminDashboardGroupBy, AdminDashboardResponse, AdjustDueRequest, ReasonRequest,
   DueEntry, AuditLogEntry, AuditLogSearchParams, PageResponse, PaymentResponse, InvoiceResponse, YearlyDashboard,
 } from "./types";
@@ -452,6 +452,35 @@ export const enrollmentApi = {
       `/seasons/${targetSeasonId}/enrollments/transfer-from/${sourceSeasonId}`,
       { method: "POST" }
     ),
+};
+
+// Season Land Enrollment API — land-side equivalent of enrollmentApi above
+export const landEnrollmentApi = {
+  /** Lands enrolled in a specific season */
+  getEnrolled: async (seasonId: number): Promise<SeasonLandEnrollmentResponse[]> =>
+    apiRequest<SeasonLandEnrollmentResponse[]>(`/seasons/${seasonId}/land-enrollments`),
+
+  /** Pump lands NOT yet enrolled in this season (picker list) */
+  getAvailable: async (seasonId: number): Promise<Land[]> =>
+    apiRequest<Land[]>(`/seasons/${seasonId}/land-enrollments/available`),
+
+  /** Enroll an existing land */
+  enroll: async (seasonId: number, landId: number): Promise<SeasonLandEnrollmentResponse> =>
+    apiRequest<SeasonLandEnrollmentResponse>(`/seasons/${seasonId}/land-enrollments`, {
+      method: "POST",
+      body: JSON.stringify({ landId }),
+    }),
+
+  /** Create a new land and immediately enroll it */
+  createAndEnroll: async (seasonId: number, data: CreateLandRequest): Promise<SeasonLandEnrollmentResponse> =>
+    apiRequest<SeasonLandEnrollmentResponse>(`/seasons/${seasonId}/land-enrollments/create-and-enroll`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+
+  /** Remove a land from this season (blocked server-side if currently assigned) */
+  unenroll: async (seasonId: number, landId: number): Promise<void> =>
+    apiRequest<void>(`/seasons/${seasonId}/land-enrollments/${landId}`, { method: "DELETE" }),
 };
 
 // Reports API (payment receipt is still server-rendered — out of scope for the invoice rework)

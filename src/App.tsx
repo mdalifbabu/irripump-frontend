@@ -38,6 +38,7 @@ import FarmerPayments from "./pages/user/FarmerPayments";
 import FarmerLands from "./pages/user/FarmerLands";
 import FarmerLedger from "./pages/user/FarmerLedger";
 import LandList from "./pages/user/LandList";
+import LandMasterList from "./pages/user/LandMasterList";
 import PaymentList from "./pages/user/PaymentList";
 import UnitPriceList from "./pages/user/UnitPriceList";
 import SeasonList from "./pages/user/SeasonList";
@@ -85,6 +86,7 @@ const App = () => (
               <Route path="/user/farmers/:farmerId/lands" element={<ProtectedRoute role="USER"><FarmerLands /></ProtectedRoute>} />
               <Route path="/user/farmers/:farmerId/ledger" element={<ProtectedRoute role="USER"><FarmerLedger /></ProtectedRoute>} />
               <Route path="/user/lands" element={<ProtectedRoute role="USER"><LandList /></ProtectedRoute>} />
+              <Route path="/user/lands/master-list" element={<ProtectedRoute role="USER"><LandMasterList /></ProtectedRoute>} />
               <Route path="/user/payments" element={<ProtectedRoute role="USER"><PaymentList /></ProtectedRoute>} />
               <Route path="/user/unit-prices" element={<ProtectedRoute role="USER"><UnitPriceList /></ProtectedRoute>} />
               <Route path="/user/seasons" element={<ProtectedRoute role="USER"><SeasonList /></ProtectedRoute>} />
