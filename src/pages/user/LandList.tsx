@@ -16,61 +16,45 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { usePumpContext } from "@/contexts/PumpContext";
-import { landApi, assignmentApi, farmerApi } from "@/lib/api/client";
+import { landEnrollmentApi, assignmentApi, farmerApi, landApi } from "@/lib/api/client";
 
 const PICKER_SIZE = 15;
-import type { Land, FarmerLandAssignment, Farmer } from "@/lib/api/types";
-import { Plus, Loader2, Pencil, Trash2, MapPin, Users, Link, Unlink, Search, X } from "lucide-react";
+import type { SeasonLandEnrollmentResponse, FarmerLandAssignment, Farmer, Land } from "@/lib/api/types";
+import { Plus, Loader2, MapPin, Users, Link, Unlink, UserPlus, X } from "lucide-react";
 import AppNavbar from "@/components/AppNavbar";
 import PumpSelector from "@/components/PumpSelector";
-import PaginationBar from "@/components/PaginationBar";
 import { userNavItems } from "@/lib/navItems";
 
-const PAGE_SIZE = 20;
-
-const schema = z.object({
+const createSchema = z.object({
   landmarkNumber: z.string().min(1, "দাগ/খতিয়ান নম্বর প্রয়োজন"),
   sizeBigha: z.number().min(0.01, "শতক > 0 হতে হবে"),
   description: z.string().optional(),
   tag: z.string().optional(),
 });
-type FormData = z.infer<typeof schema>;
+type CreateForm = z.infer<typeof createSchema>;
 
+/**
+ * Season-context land management: which lands are enrolled in the selected season, and
+ * assign/unassign them to farmers within that season. Land's own create/update/(soft-)delete
+ * — independent of any season — lives on the separate Land Master List page.
+ */
 const LandList = () => {
-  // all-lands tab
-  const [crudLands, setCrudLands] = useState<Land[]>([]);
-  const [crudPage, setCrudPage] = useState(0);
-  const [crudTotalPages, setCrudTotalPages] = useState(0);
-  const [crudTotalElements, setCrudTotalElements] = useState(0);
-  const [crudQuery, setCrudQuery] = useState("");
-  const [crudLoading, setCrudLoading] = useState(false);
+  const [enrolled, setEnrolled] = useState<SeasonLandEnrollmentResponse[]>([]);
+  const [enrolledLoading, setEnrolledLoading] = useState(false);
 
-  // assigned tab
-  const [assignedLands, setAssignedLands] = useState<Land[]>([]);
-  const [assignedPage, setAssignedPage] = useState(0);
-  const [assignedTotalPages, setAssignedTotalPages] = useState(0);
-  const [assignedTotalElements, setAssignedTotalElements] = useState(0);
-  const [assignedLoading, setAssignedLoading] = useState(false);
+  // "Add to season" dialog — existing-or-new picker, mirroring the farmer enroll dialog
+  const [showEnrollDialog, setShowEnrollDialog] = useState(false);
+  const [available, setAvailable] = useState<Land[]>([]);
+  const [enrollSearch, setEnrollSearch] = useState("");
+  const [enrolling, setEnrolling] = useState(false);
 
-  // unassigned tab
-  const [unassignedLands, setUnassignedLands] = useState<Land[]>([]);
-  const [unassignedPage, setUnassignedPage] = useState(0);
-  const [unassignedTotalPages, setUnassignedTotalPages] = useState(0);
-  const [unassignedTotalElements, setUnassignedTotalElements] = useState(0);
-  const [unassignedLoading, setUnassignedLoading] = useState(false);
-
-  // shared
-  const [assignments, setAssignments] = useState<FarmerLandAssignment[]>([]);
-  const [assignLoading, setAssignLoading] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
-  const [showForm, setShowForm] = useState(false);
-  const [editing, setEditing] = useState<Land | null>(null);
-  const [editBigha, setEditBigha] = useState(0);
-  const [deleting, setDeleting] = useState<Land | null>(null);
+  const [removingEnrollment, setRemovingEnrollment] = useState<SeasonLandEnrollmentResponse | null>(null);
   const [busy, setBusy] = useState(false);
-  const [assigningLand, setAssigningLand] = useState<Land | null>(null);
+
+  const [assignments, setAssignments] = useState<FarmerLandAssignment[]>([]);
+  const [assigningLand, setAssigningLand] = useState<SeasonLandEnrollmentResponse | null>(null);
   const [unassigning, setUnassigning] = useState<FarmerLandAssignment | null>(null);
-  const [tagPromptLand, setTagPromptLand] = useState<Land | null>(null);
+  const [tagPromptLand, setTagPromptLand] = useState<{ id: number; landmarkNumber: string; tag?: string } | null>(null);
   const [tagPromptValue, setTagPromptValue] = useState("");
 
   // farmer picker state (inside assign dialog)
@@ -85,8 +69,8 @@ const LandList = () => {
   const { isAuthenticated, isLoading } = useAuth();
   const { pumpId, season, year, seasons } = usePumpContext();
 
-  const form = useForm<FormData>({
-    resolver: zodResolver(schema),
+  const createForm = useForm<CreateForm>({
+    resolver: zodResolver(createSchema),
     defaultValues: { landmarkNumber: "", sizeBigha: 0, description: "", tag: "" },
   });
 
@@ -97,68 +81,95 @@ const LandList = () => {
   }, [isLoading, isAuthenticated, navigate]);
 
   useEffect(() => {
-    if (pumpId) {
-      fetchLandsPaged(0);
-    }
-  }, [pumpId]);
-
-  useEffect(() => {
     if (pumpId && currentSeasonId) {
+      fetchEnrolled();
       fetchAssignments();
-      fetchAssignedLandsPaged(0);
-      fetchUnassignedLandsPaged(0);
     }
   }, [pumpId, currentSeasonId, year]);
 
-  const fetchLandsPaged = async (page: number, query?: string) => {
-    if (!pumpId) return;
-    setCrudLoading(true);
+  const fetchEnrolled = async () => {
+    if (!currentSeasonId) return;
+    setEnrolledLoading(true);
     try {
-      const q = query !== undefined ? query : crudQuery;
-      const result = await landApi.getByPumpPaged(pumpId, page, PAGE_SIZE, q || undefined);
-      setCrudLands(result.content);
-      setCrudPage(result.number);
-      setCrudTotalPages(result.totalPages);
-      setCrudTotalElements(result.totalElements);
+      setEnrolled(await landEnrollmentApi.getEnrolled(currentSeasonId));
     } catch { /* silent */ }
-    finally { setCrudLoading(false); }
-  };
-
-  const fetchAssignedLandsPaged = async (page: number) => {
-    if (!pumpId || !currentSeasonId) return;
-    setAssignedLoading(true);
-    try {
-      const result = await landApi.getAssignedPaged(pumpId, currentSeasonId, year, page, PAGE_SIZE);
-      setAssignedLands(result.content);
-      setAssignedPage(result.number);
-      setAssignedTotalPages(result.totalPages);
-      setAssignedTotalElements(result.totalElements);
-    } catch { /* silent */ }
-    finally { setAssignedLoading(false); }
-  };
-
-  const fetchUnassignedLandsPaged = async (page: number) => {
-    if (!pumpId || !currentSeasonId) return;
-    setUnassignedLoading(true);
-    try {
-      const result = await landApi.getUnassignedPaged(pumpId, currentSeasonId, year, page, PAGE_SIZE);
-      setUnassignedLands(result.content);
-      setUnassignedPage(result.number);
-      setUnassignedTotalPages(result.totalPages);
-      setUnassignedTotalElements(result.totalElements);
-    } catch { /* silent */ }
-    finally { setUnassignedLoading(false); }
+    finally { setEnrolledLoading(false); }
   };
 
   const fetchAssignments = async () => {
     if (!pumpId || !currentSeasonId) return;
-    setAssignLoading(true);
     try { setAssignments(await assignmentApi.getAll(pumpId, currentSeasonId, year)); }
     catch { /* silent */ }
-    finally { setAssignLoading(false); }
   };
 
-  // Picker: load/search farmers with debounce
+  const refresh = () => { fetchEnrolled(); fetchAssignments(); };
+
+  const getAssignment = useCallback((landId: number) =>
+    assignments.find(a => a.landId === landId) ?? null, [assignments]);
+
+  // ── "Add to season" — existing-or-new picker ──────────────────────────────
+  const openEnrollDialog = async () => {
+    if (!currentSeasonId) return;
+    setEnrollSearch("");
+    createForm.reset();
+    try {
+      setAvailable(await landEnrollmentApi.getAvailable(currentSeasonId));
+    } catch {
+      setAvailable([]);
+    }
+    setShowEnrollDialog(true);
+  };
+
+  const handleEnrollExisting = async (landId: number) => {
+    if (!currentSeasonId) return;
+    setEnrolling(true);
+    try {
+      await landEnrollmentApi.enroll(currentSeasonId, landId);
+      toast({ title: "সফল", description: "জমি এই মৌসুমে যোগ করা হয়েছে" });
+      setShowEnrollDialog(false);
+      fetchEnrolled();
+    } catch (e: any) {
+      toast({ title: "Error", description: e.message, variant: "destructive" });
+    } finally {
+      setEnrolling(false);
+    }
+  };
+
+  const handleCreateAndEnroll = async (data: CreateForm) => {
+    if (!currentSeasonId || !pumpId) return;
+    setEnrolling(true);
+    try {
+      await landEnrollmentApi.createAndEnroll(currentSeasonId, {
+        pumpId,
+        landmarkNumber: data.landmarkNumber,
+        sizeShatak: data.sizeBigha,
+        description: data.description,
+        tag: data.tag || undefined,
+      });
+      toast({ title: "সফল", description: "নতুন জমি তৈরি ও এই মৌসুমে যোগ করা হয়েছে" });
+      setShowEnrollDialog(false);
+      createForm.reset();
+      fetchEnrolled();
+    } catch (e: any) {
+      toast({ title: "Error", description: e.message, variant: "destructive" });
+    } finally {
+      setEnrolling(false);
+    }
+  };
+
+  const handleRemoveFromSeason = async () => {
+    if (!removingEnrollment || !currentSeasonId) return;
+    setBusy(true);
+    try {
+      await landEnrollmentApi.unenroll(currentSeasonId, removingEnrollment.landId);
+      toast({ title: "অপসারণ সফল" });
+      setRemovingEnrollment(null);
+      fetchEnrolled();
+    } catch (e: any) { toast({ title: "ত্রুটি", description: e.message, variant: "destructive" }); }
+    finally { setBusy(false); }
+  };
+
+  // ── Assign / unassign (existing farmer-picker pattern, reused as-is) ──────
   const loadPickerFarmers = async (q: string) => {
     if (!pumpId) return;
     setPickerLoading(true);
@@ -180,88 +191,22 @@ const LandList = () => {
     return () => { if (pickerDebounce.current) clearTimeout(pickerDebounce.current); };
   }, [assigningLand, pickerQuery, pumpId]);
 
-  const refreshAssignmentTabs = () => {
-    fetchAssignments();
-    fetchAssignedLandsPaged(0);
-    fetchUnassignedLandsPaged(0);
-  };
-
-  const getAssignment = useCallback((landId: number) =>
-    assignments.find(a => a.landId === landId) ?? null, [assignments]);
-
-  const onSubmit = async (data: FormData) => {
-    if (!pumpId) return;
-    setSubmitting(true);
-    try {
-      await landApi.create({ pumpId, landmarkNumber: data.landmarkNumber, sizeShatak: data.sizeBigha, description: data.description, tag: data.tag || undefined });
-      toast({ title: "সফল", description: "জমি তৈরি হয়েছে" });
-      form.reset({ landmarkNumber: "", sizeBigha: 0, description: "", tag: "" });
-      setShowForm(false);
-      fetchLandsPaged(0);
-      refreshAssignmentTabs();
-    } catch (e: any) {
-      toast({ title: "ত্রুটি", description: e.message, variant: "destructive" });
-    } finally { setSubmitting(false); }
-  };
-
-  const handleUpdate = async () => {
-    if (!editing) return;
-    setBusy(true);
-    try {
-      await landApi.update(editing.id, {
-        landmarkNumber: editing.landmarkNumber,
-        sizeShatak: editBigha,
-        description: editing.description,
-        tag: editing.tag,
-      });
-      toast({ title: "আপডেট সফল" });
-      setEditing(null);
-      fetchLandsPaged(crudPage);
-    } catch (e: any) { toast({ title: "ত্রুটি", description: e.message, variant: "destructive" }); }
-    finally { setBusy(false); }
-  };
-
-  const handleTagUpdate = async () => {
-    if (!tagPromptLand) return;
-    setBusy(true);
-    try {
-      await landApi.update(tagPromptLand.id, { tag: tagPromptValue });
-      toast({ title: "ট্যাগ আপডেট হয়েছে" });
-      setTagPromptLand(null);
-      fetchLandsPaged(crudPage);
-    } catch (e: any) { toast({ title: "ত্রুটি", description: e.message, variant: "destructive" }); }
-    finally { setBusy(false); }
-  };
-
-  const handleDelete = async () => {
-    if (!deleting) return;
-    setBusy(true);
-    try {
-      await landApi.delete(deleting.id);
-      toast({ title: "মুছে ফেলা হয়েছে" });
-      setDeleting(null);
-      fetchLandsPaged(0);
-      refreshAssignmentTabs();
-    } catch (e: any) { toast({ title: "ত্রুটি", description: e.message, variant: "destructive" }); }
-    finally { setBusy(false); }
-  };
-
   const handleAssign = async () => {
     if (!assigningLand || !pickerSelectedFarmer || !currentSeasonId) return;
     setBusy(true);
     try {
       await assignmentApi.assign({
         farmerId: pickerSelectedFarmer.id,
-        landId: assigningLand.id,
+        landId: assigningLand.landId,
         seasonId: currentSeasonId,
         year,
       });
       toast({ title: "সফল", description: "জমি বরাদ্দ হয়েছে" });
       const justAssigned = assigningLand;
       setAssigningLand(null);
-      refreshAssignmentTabs();
-      setTagPromptLand(justAssigned);
-      setTagPromptValue(justAssigned.tag ?? "");
+      refresh();
+      setTagPromptLand({ id: justAssigned.landId, landmarkNumber: justAssigned.landmarkNumber });
+      setTagPromptValue("");
     } catch (e: any) { toast({ title: "ত্রুটি", description: e.message, variant: "destructive" }); }
     finally { setBusy(false); }
   };
@@ -273,10 +218,26 @@ const LandList = () => {
       await assignmentApi.remove(unassigning.id);
       toast({ title: "বরাদ্দ বাতিল হয়েছে" });
       setUnassigning(null);
-      refreshAssignmentTabs();
+      refresh();
     } catch (e: any) { toast({ title: "ত্রুটি", description: e.message, variant: "destructive" }); }
     finally { setBusy(false); }
   };
+
+  const handleTagUpdate = async () => {
+    if (!tagPromptLand) return;
+    setBusy(true);
+    try {
+      await landApi.update(tagPromptLand.id, { tag: tagPromptValue });
+      toast({ title: "ট্যাগ আপডেট হয়েছে" });
+      setTagPromptLand(null);
+    } catch (e: any) { toast({ title: "ত্রুটি", description: e.message, variant: "destructive" }); }
+    finally { setBusy(false); }
+  };
+
+  const filteredAvailable = available.filter(l => {
+    const q = enrollSearch.toLowerCase();
+    return !q || l.landmarkNumber.toLowerCase().includes(q) || (l.tag ?? "").toLowerCase().includes(q);
+  });
 
   if (isLoading) {
     return <div className="min-h-screen flex items-center justify-center"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div></div>;
@@ -288,295 +249,166 @@ const LandList = () => {
     <div className="min-h-screen bg-gradient-to-br from-primary/10 via-background to-accent/10">
       <AppNavbar
         title="জমি ব্যবস্থাপনা"
-        subtitle="Land Management"
+        subtitle={`${season} / ${year} — মৌসুম ভিত্তিক`}
         navItems={userNavItems}
         rightContent={
           <div className="flex flex-wrap gap-2 items-center">
             <PumpSelector />
-            <Button size="sm" onClick={() => setShowForm(!showForm)}><Plus className="w-4 h-4 mr-1" />নতুন জমি</Button>
+            {currentSeasonId && (
+              <Button size="sm" onClick={openEnrollDialog}><Plus className="w-4 h-4 mr-1" />জমি যোগ</Button>
+            )}
           </div>
         }
       />
 
       <main className="max-w-7xl mx-auto p-4 md:p-6 space-y-6">
-        {showForm && (
+        {noSeason ? (
+          <Card><CardContent className="py-8 text-center text-muted-foreground">
+            এই মৌসুমের জন্য কোনো সিজন কনফিগার করা নেই।{" "}
+            <Button variant="link" className="p-0" onClick={() => navigate("/user/seasons")}>মৌসুম তৈরি করুন</Button>
+          </CardContent></Card>
+        ) : (
           <Card>
-            <CardHeader><CardTitle className="flex items-center gap-2"><MapPin className="w-5 h-5" />নতুন জমি</CardTitle></CardHeader>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <MapPin className="w-5 h-5" />
+                নথিভুক্ত জমি — {season}/{year} ({enrolled.length})
+              </CardTitle>
+            </CardHeader>
             <CardContent>
-              <Form {...form}>
-                <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <FormField control={form.control} name="landmarkNumber" render={({ field }) => (
-                      <FormItem><FormLabel>দাগ/খতিয়ান নম্বর</FormLabel><FormControl><Input placeholder="e.g., 123" {...field} /></FormControl><FormMessage /></FormItem>
-                    )} />
-                    <FormField control={form.control} name="sizeBigha" render={({ field }) => (
-                      <FormItem><FormLabel>শতক</FormLabel><FormControl><Input type="number" step="0.01" min="0" placeholder="0" {...field} onChange={(e) => field.onChange(e.target.value === "" ? 0 : parseFloat(e.target.value))} /></FormControl><FormMessage /></FormItem>
-                    )} />
-                  </div>
-                  <FormField control={form.control} name="description" render={({ field }) => (
-                    <FormItem><FormLabel>বিবরণ</FormLabel><FormControl><Input placeholder="ঐচ্ছিক বিবরণ" {...field} /></FormControl><FormMessage /></FormItem>
-                  )} />
-                  <FormField control={form.control} name="tag" render={({ field }) => (
-                    <FormItem><FormLabel>ট্যাগ / ফ্ল্যাগ</FormLabel><FormControl><Input placeholder="অনুসন্ধানযোগ্য লেবেল (ঐচ্ছিক)" {...field} /></FormControl><FormMessage /></FormItem>
-                  )} />
-                  <div className="flex gap-2 justify-end">
-                    <Button type="button" variant="outline" onClick={() => setShowForm(false)}>বাতিল</Button>
-                    <Button type="submit" disabled={submitting}>{submitting && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}সংরক্ষণ</Button>
-                  </div>
-                </form>
-              </Form>
-            </CardContent>
-          </Card>
-        )}
-
-        <Tabs defaultValue="all">
-          <TabsList className="mb-4">
-            <TabsTrigger value="all">
-              <MapPin className="w-4 h-4 mr-1" />
-              জমির তালিকা ({crudTotalElements})
-            </TabsTrigger>
-            <TabsTrigger value="assigned" disabled={noSeason}>
-              <Link className="w-4 h-4 mr-1" />
-              বরাদ্দ জমি ({assignedTotalElements})
-            </TabsTrigger>
-            <TabsTrigger value="unassigned" disabled={noSeason}>
-              <Unlink className="w-4 h-4 mr-1" />
-              খালি জমি ({unassignedTotalElements})
-            </TabsTrigger>
-          </TabsList>
-
-          {/* ── Tab 1: All Lands ─────────────────────────────────────── */}
-          <TabsContent value="all">
-            <Card>
-              <CardHeader>
-                <div className="flex items-center justify-between flex-wrap gap-2">
-                  <CardTitle className="flex items-center gap-2">
-                    <MapPin className="w-5 h-5" />
-                    সকল জমির তালিকা ({crudTotalElements})
-                  </CardTitle>
-                  <div className="flex gap-2">
-                    <Input
-                      placeholder="দাগ নম্বর বা ট্যাগ"
-                      value={crudQuery}
-                      onChange={e => setCrudQuery(e.target.value)}
-                      onKeyDown={e => e.key === "Enter" && fetchLandsPaged(0)}
-                      className="w-44 h-8 text-sm"
-                    />
-                    <Button size="sm" className="h-8" onClick={() => fetchLandsPaged(0)}><Search className="w-3.5 h-3.5" /></Button>
-                    {crudQuery && <Button size="sm" variant="ghost" className="h-8" onClick={() => { setCrudQuery(""); fetchLandsPaged(0, ""); }}><X className="w-3.5 h-3.5" /></Button>}
-                  </div>
+              {enrolledLoading ? (
+                <div className="flex justify-center py-8"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div></div>
+              ) : enrolled.length === 0 ? (
+                <div className="py-12 text-center space-y-3">
+                  <MapPin className="w-12 h-12 mx-auto text-muted-foreground" />
+                  <p className="text-muted-foreground">এই মৌসুমে কোনো জমি নেই।</p>
+                  <Button onClick={openEnrollDialog}><Plus className="w-4 h-4 mr-2" />জমি যোগ করুন</Button>
                 </div>
-              </CardHeader>
-              <CardContent>
-                {crudLoading ? (
-                  <div className="flex justify-center py-8"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div></div>
-                ) : crudLands.length === 0 ? (
-                  <div className="text-center py-8 text-muted-foreground">কোনো জমি নেই।</div>
-                ) : (
-                  <div className="overflow-x-auto">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>দাগ/খতিয়ান</TableHead>
-                          <TableHead>শতক</TableHead>
-                          <TableHead>ট্যাগ</TableHead>
-                          <TableHead>অবস্থা</TableHead>
-                          <TableHead>অ্যাকশন</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {crudLands.map((land) => (
-                          <TableRow key={land.id}>
-                            <TableCell>{land.landmarkNumber}</TableCell>
+              ) : (
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>দাগ/খতিয়ান</TableHead>
+                        <TableHead>শতক</TableHead>
+                        <TableHead>কৃষক</TableHead>
+                        <TableHead>অ্যাকশন</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {enrolled.map((e) => {
+                        const asgn = getAssignment(e.landId);
+                        return (
+                          <TableRow key={e.enrollmentId}>
+                            <TableCell>{e.landmarkNumber}</TableCell>
                             <TableCell>
-                              <span className="font-bold text-primary">{(land.sizeShatak ?? 0).toFixed(2)} শতক</span>
-                              <br /><span className="text-xs text-muted-foreground">{((land.sizeShatak ?? 0) / 33).toFixed(3)} বিঘা</span>
+                              <span className="font-bold text-primary">{(e.sizeShatak ?? 0).toFixed(2)} শতক</span>
                             </TableCell>
-                            <TableCell className="text-sm text-muted-foreground">{land.tag ?? "-"}</TableCell>
-                            <TableCell>
-                              <Badge variant={land.isActive ? "default" : "secondary"}>
-                                {land.isActive ? "সক্রিয়" : "নিষ্ক্রিয়"}
-                              </Badge>
+                            <TableCell className="text-sm">
+                              {e.isAssigned ? (
+                                e.assignedFarmerName || (asgn ? (asgn.farmerName || `কৃষক #${asgn.farmerId}`) : "—")
+                              ) : (
+                                <Badge variant="outline">খালি</Badge>
+                              )}
                             </TableCell>
                             <TableCell>
                               <div className="flex gap-1">
-                                <Button size="icon" variant="outline" className="h-8 w-8" onClick={() => {
-                                  setEditing({ ...land });
-                                  setEditBigha(land.sizeShatak ?? 0);
-                                }}>
-                                  <Pencil className="w-3.5 h-3.5" />
-                                </Button>
-                                <Button size="icon" variant="outline" className="h-8 w-8 text-destructive" onClick={() => setDeleting(land)}>
-                                  <Trash2 className="w-3.5 h-3.5" />
-                                </Button>
+                                {e.isAssigned ? (
+                                  asgn && (
+                                    <Button size="sm" variant="outline" className="h-7 text-destructive border-destructive/30" onClick={() => setUnassigning(asgn)}>
+                                      <Unlink className="w-3 h-3 mr-1" />বরাদ্দ বাতিল
+                                    </Button>
+                                  )
+                                ) : (
+                                  <>
+                                    <Button size="sm" variant="outline" className="h-7" onClick={() => setAssigningLand(e)}>
+                                      <Link className="w-3 h-3 mr-1" />বরাদ্দ
+                                    </Button>
+                                    <Button size="sm" variant="outline" className="h-7 text-destructive border-destructive/30" onClick={() => setRemovingEnrollment(e)}>
+                                      অপসারণ
+                                    </Button>
+                                  </>
+                                )}
                               </div>
                             </TableCell>
                           </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                    <PaginationBar
-                      currentPage={crudPage}
-                      totalPages={crudTotalPages}
-                      totalElements={crudTotalElements}
-                      pageSize={PAGE_SIZE}
-                      onPageChange={(p) => fetchLandsPaged(p)}
-                    />
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          {/* ── Tab 2: Assigned Lands ─────────────────────────────────── */}
-          <TabsContent value="assigned">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Users className="w-5 h-5" />
-                  বরাদ্দ জমি — {season} / {year} ({assignedTotalElements})
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                {assignedLoading || assignLoading ? (
-                  <div className="flex justify-center py-8"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div></div>
-                ) : assignedLands.length === 0 ? (
-                  <div className="text-center py-8 text-muted-foreground">
-                    {noSeason ? "মৌসুম নির্বাচন করুন।" : "এই মৌসুমে কোনো বরাদ্দ নেই।"}
-                  </div>
-                ) : (
-                  <div className="overflow-x-auto">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>দাগ/খতিয়ান</TableHead>
-                          <TableHead>শতক</TableHead>
-                          <TableHead>ট্যাগ</TableHead>
-                          <TableHead>কৃষক</TableHead>
-                          <TableHead>অ্যাকশন</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {assignedLands.map((land) => {
-                          const asgn = getAssignment(land.id);
-                          return (
-                            <TableRow key={land.id}>
-                              <TableCell>{land.landmarkNumber}</TableCell>
-                              <TableCell>
-                                <span className="font-bold text-primary">{(land.sizeShatak ?? 0).toFixed(2)} শতক</span>
-                                <br /><span className="text-xs text-muted-foreground">{((land.sizeShatak ?? 0) / 33).toFixed(3)} বিঘা</span>
-                              </TableCell>
-                              <TableCell className="text-sm text-muted-foreground">{land.tag ?? "-"}</TableCell>
-                              <TableCell className="text-sm">
-                                {asgn ? (asgn.farmerName || `কৃষক #${asgn.farmerId}`) : "-"}
-                              </TableCell>
-                              <TableCell>
-                                {asgn && (
-                                  <Button size="sm" variant="outline" className="h-7 text-destructive border-destructive/30" onClick={() => setUnassigning(asgn)}>
-                                    <Unlink className="w-3 h-3 mr-1" />বাতিল
-                                  </Button>
-                                )}
-                              </TableCell>
-                            </TableRow>
-                          );
-                        })}
-                      </TableBody>
-                    </Table>
-                    <PaginationBar
-                      currentPage={assignedPage}
-                      totalPages={assignedTotalPages}
-                      totalElements={assignedTotalElements}
-                      pageSize={PAGE_SIZE}
-                      onPageChange={(p) => fetchAssignedLandsPaged(p)}
-                    />
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          {/* ── Tab 3: Unassigned Lands ───────────────────────────────── */}
-          <TabsContent value="unassigned">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Unlink className="w-5 h-5" />
-                  খালি জমি — {season} / {year} ({unassignedTotalElements})
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                {unassignedLoading ? (
-                  <div className="flex justify-center py-8"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div></div>
-                ) : unassignedLands.length === 0 ? (
-                  <div className="text-center py-8 text-muted-foreground">
-                    {noSeason ? "মৌসুম নির্বাচন করুন।" : "সব জমি বরাদ্দ হয়ে গেছে।"}
-                  </div>
-                ) : (
-                  <div className="overflow-x-auto">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>দাগ/খতিয়ান</TableHead>
-                          <TableHead>শতক</TableHead>
-                          <TableHead>ট্যাগ</TableHead>
-                          <TableHead>অ্যাকশন</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {unassignedLands.map((land) => (
-                          <TableRow key={land.id}>
-                            <TableCell>{land.landmarkNumber}</TableCell>
-                            <TableCell>
-                              <span className="font-bold text-primary">{(land.sizeShatak ?? 0).toFixed(2)} শতক</span>
-                              <br /><span className="text-xs text-muted-foreground">{((land.sizeShatak ?? 0) / 33).toFixed(3)} বিঘা</span>
-                            </TableCell>
-                            <TableCell className="text-sm text-muted-foreground">{land.tag ?? "-"}</TableCell>
-                            <TableCell>
-                              {currentSeasonId && (
-                                <Button size="sm" variant="outline" className="h-7" onClick={() => { setAssigningLand(land); setSelectedFarmerId(""); }}>
-                                  <Link className="w-3 h-3 mr-1" />বরাদ্দ
-                                </Button>
-                              )}
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                    <PaginationBar
-                      currentPage={unassignedPage}
-                      totalPages={unassignedTotalPages}
-                      totalElements={unassignedTotalElements}
-                      pageSize={PAGE_SIZE}
-                      onPageChange={(p) => fetchUnassignedLandsPaged(p)}
-                    />
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </TabsContent>
-        </Tabs>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
       </main>
 
-      {/* Edit Land Dialog */}
-      <Dialog open={!!editing} onOpenChange={(o) => !o && setEditing(null)}>
-        <DialogContent>
-          <DialogHeader><DialogTitle>জমি সম্পাদনা</DialogTitle></DialogHeader>
-          {editing && (
-            <div className="space-y-3">
-              <div><Label>দাগ/খতিয়ান নম্বর</Label><Input value={editing.landmarkNumber} onChange={(e) => setEditing({ ...editing, landmarkNumber: e.target.value })} /></div>
-              <div><Label>শতক</Label><Input type="number" step="0.01" min="0" value={editBigha} onChange={(e) => setEditBigha(e.target.value === "" ? 0 : parseFloat(e.target.value))} /></div>
-              <div><Label>বিবরণ</Label><Input value={editing.description ?? ""} onChange={(e) => setEditing({ ...editing, description: e.target.value })} /></div>
-              <div><Label>ট্যাগ / ফ্ল্যাগ</Label><Input value={editing.tag ?? ""} onChange={(e) => setEditing({ ...editing, tag: e.target.value })} placeholder="অনুসন্ধানযোগ্য লেবেল" /></div>
-            </div>
-          )}
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setEditing(null)}>বাতিল</Button>
-            <Button onClick={handleUpdate} disabled={busy}>{busy && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}সংরক্ষণ</Button>
-          </DialogFooter>
+      {/* Add land to season dialog — existing-or-new picker */}
+      <Dialog open={showEnrollDialog} onOpenChange={(o) => !o && setShowEnrollDialog(false)}>
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+          <DialogHeader><DialogTitle>জমি যোগ করুন — {season}/{year}</DialogTitle></DialogHeader>
+          <Tabs defaultValue="select">
+            <TabsList className="w-full">
+              <TabsTrigger value="select" className="flex-1"><MapPin className="w-4 h-4 mr-1" />বিদ্যমান থেকে</TabsTrigger>
+              <TabsTrigger value="create" className="flex-1"><UserPlus className="w-4 h-4 mr-1" />নতুন তৈরি</TabsTrigger>
+            </TabsList>
+
+            {/* Select existing */}
+            <TabsContent value="select" className="space-y-3 mt-3">
+              <Input
+                placeholder="দাগ নম্বর বা ট্যাগ..."
+                value={enrollSearch}
+                onChange={(e) => setEnrollSearch(e.target.value)}
+              />
+              {filteredAvailable.length === 0 ? (
+                <p className="text-center py-6 text-muted-foreground text-sm">
+                  {available.length === 0 ? "এই পাম্পে যোগ করার মতো কোনো জমি নেই।" : "কোনো ফলাফল নেই।"}
+                </p>
+              ) : (
+                <div className="space-y-2 max-h-72 overflow-y-auto">
+                  {filteredAvailable.map((l) => (
+                    <div key={l.id} className="flex items-center justify-between p-3 border rounded-lg hover:bg-muted/50">
+                      <div>
+                        <p className="font-medium text-sm">{l.landmarkNumber}</p>
+                        <p className="text-xs text-muted-foreground">{(l.sizeShatak ?? 0).toFixed(2)} শতক{l.tag ? ` · ${l.tag}` : ""}</p>
+                      </div>
+                      <Button size="sm" onClick={() => handleEnrollExisting(l.id)} disabled={enrolling}>যোগ</Button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </TabsContent>
+
+            {/* Create new */}
+            <TabsContent value="create" className="mt-3">
+              <Form {...createForm}>
+                <form onSubmit={createForm.handleSubmit(handleCreateAndEnroll)} className="space-y-3">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <FormField control={createForm.control} name="landmarkNumber" render={({ field }) => (
+                      <FormItem><FormLabel>দাগ/খতিয়ান নম্বর *</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
+                    )} />
+                    <FormField control={createForm.control} name="sizeBigha" render={({ field }) => (
+                      <FormItem><FormLabel>শতক *</FormLabel><FormControl><Input type="number" step="0.01" min="0" {...field} onChange={(e) => field.onChange(e.target.value === "" ? 0 : parseFloat(e.target.value))} /></FormControl><FormMessage /></FormItem>
+                    )} />
+                    <FormField control={createForm.control} name="description" render={({ field }) => (
+                      <FormItem><FormLabel>বিবরণ</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
+                    )} />
+                    <FormField control={createForm.control} name="tag" render={({ field }) => (
+                      <FormItem><FormLabel>ট্যাগ</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
+                    )} />
+                  </div>
+                  <DialogFooter>
+                    <Button type="button" variant="outline" onClick={() => setShowEnrollDialog(false)}>বাতিল</Button>
+                    <Button type="submit" disabled={enrolling}>তৈরি ও যোগ করুন</Button>
+                  </DialogFooter>
+                </form>
+              </Form>
+            </TabsContent>
+          </Tabs>
         </DialogContent>
       </Dialog>
 
-      {/* Tag update prompt */}
+      {/* Tag update prompt (after assign) */}
       <Dialog open={!!tagPromptLand} onOpenChange={(o) => { if (!o) setTagPromptLand(null); }}>
         <DialogContent className="max-w-sm">
           <DialogHeader><DialogTitle>ট্যাগ আপডেট করবেন?</DialogTitle></DialogHeader>
@@ -654,21 +486,21 @@ const LandList = () => {
         </DialogContent>
       </Dialog>
 
-      {/* Delete Land Dialog */}
-      <AlertDialog open={!!deleting} onOpenChange={(o) => !o && setDeleting(null)}>
+      {/* Remove from season confirmation */}
+      <AlertDialog open={!!removingEnrollment} onOpenChange={(o) => !o && setRemovingEnrollment(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>জমি মুছতে চান?</AlertDialogTitle>
-            <AlertDialogDescription>{deleting?.landmarkNumber} মুছে যাবে।</AlertDialogDescription>
+            <AlertDialogTitle>জমি অপসারণ করবেন?</AlertDialogTitle>
+            <AlertDialogDescription>"{removingEnrollment?.landmarkNumber}" কে {season}/{year} মৌসুম থেকে বাদ দেওয়া হবে। জমিটি সকল জমির তালিকায় থেকে যাবে।</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>বাতিল</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDelete} disabled={busy} className="bg-destructive text-destructive-foreground">মুছুন</AlertDialogAction>
+            <AlertDialogAction onClick={handleRemoveFromSeason} disabled={busy} className="bg-destructive text-destructive-foreground">অপসারণ</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Unassign Dialog */}
+      {/* Unassign confirmation */}
       <AlertDialog open={!!unassigning} onOpenChange={(o) => !o && setUnassigning(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>

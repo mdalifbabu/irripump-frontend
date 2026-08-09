@@ -250,6 +250,19 @@ export interface SeasonEnrollmentResponse {
   dueAmount?: number;
 }
 
+export interface SeasonLandEnrollmentResponse {
+  enrollmentId: number;
+  landId: number;
+  landmarkNumber: string;
+  sizeShatak?: number;
+  isActive?: boolean;
+  seasonId: number;
+  seasonName: string;
+  year: number;
+  isAssigned?: boolean;
+  assignedFarmerName?: string;
+}
+
 export interface FarmerDetailResponse {
   id: number;
   pumpId: number;
