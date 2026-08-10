@@ -8,12 +8,13 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem, SelectGroup, SelectLabel } from "@/components/ui/select";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { usePumpContext } from "@/contexts/PumpContext";
 import { seasonApi, enrollmentApi } from "@/lib/api/client";
-import type { Season, CreateSeasonRequest } from "@/lib/api/types";
-import { Plus, Star, Trash2, RefreshCw, CalendarDays, Loader2, Shuffle } from "lucide-react";
+import type { Season, CreateSeasonRequest, SeasonDashboard } from "@/lib/api/types";
+import { Plus, Star, Trash2, RefreshCw, CalendarDays, Loader2, Shuffle, Pencil } from "lucide-react";
 import AppNavbar from "@/components/AppNavbar";
 import PumpSelector from "@/components/PumpSelector";
 import { userNavItems } from "@/lib/navItems";
@@ -34,6 +35,9 @@ export default function SeasonList() {
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState<Season | null>(null);
   const [busy, setBusy] = useState(false);
+  const [editing, setEditing] = useState<Season | null>(null);
+  const [editSaving, setEditSaving] = useState(false);
+  const [dashboards, setDashboards] = useState<Record<number, SeasonDashboard>>({});
 
   // Magic Button state
   const [showTransfer, setShowTransfer] = useState(false);
@@ -61,6 +65,18 @@ export default function SeasonList() {
     try {
       const data = await seasonApi.getByPumpAndYear(pumpId, year);
       setSeasons(data);
+      // Fetch per-season farmer/land counts so the delete button can be disabled up front
+      // (rather than only discovering the guard's rejection after a doomed request).
+      const entries = await Promise.all(
+        data.map(async (s) => {
+          try {
+            return [s.id, await seasonApi.getDashboard(s.id)] as const;
+          } catch {
+            return null;
+          }
+        })
+      );
+      setDashboards(Object.fromEntries(entries.filter((e): e is readonly [number, SeasonDashboard] => e !== null)));
     } catch {
       toast({ title: "Error", description: "মৌসুম লোড করা যায়নি", variant: "destructive" });
     } finally {
@@ -89,6 +105,33 @@ export default function SeasonList() {
       toast({ title: "Error", description: e.message, variant: "destructive" });
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleUpdate = async () => {
+    if (!editing) return;
+    if (!editing.seasonName || !editing.seasonNameBengali || !editing.startDate || !editing.endDate) {
+      toast({ title: "Error", description: "সব প্রয়োজনীয় তথ্য পূরণ করুন", variant: "destructive" });
+      return;
+    }
+    setEditSaving(true);
+    try {
+      await seasonApi.update(editing.id, {
+        seasonName: editing.seasonName,
+        seasonNameBengali: editing.seasonNameBengali,
+        description: editing.description,
+        startDate: editing.startDate,
+        endDate: editing.endDate,
+        year: editing.year,
+      });
+      toast({ title: "সফল", description: "মৌসুম হালনাগাদ হয়েছে" });
+      setEditing(null);
+      fetchSeasons();
+      refreshSeasons();
+    } catch (e: any) {
+      toast({ title: "Error", description: e.message, variant: "destructive" });
+    } finally {
+      setEditSaving(false);
     }
   };
 
@@ -226,9 +269,33 @@ export default function SeasonList() {
                     <Button size="sm" variant="outline" className="flex-1" onClick={() => openTransfer(s)}>
                       <Shuffle className="w-3.5 h-3.5 mr-1" />স্থানান্তর
                     </Button>
-                    <Button size="sm" variant="outline" className="text-destructive" onClick={() => setDeleting(s)}>
-                      <Trash2 className="w-3.5 h-3.5" />
+                    <Button size="sm" variant="outline" onClick={() => setEditing({ ...s })}>
+                      <Pencil className="w-3.5 h-3.5" />
                     </Button>
+                    {(() => {
+                      const d = dashboards[s.id];
+                      const blocked = !!d && (d.totalFarmers > 0 || d.totalLands > 0);
+                      const deleteBtn = (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="text-destructive"
+                          disabled={blocked}
+                          onClick={() => setDeleting(s)}
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </Button>
+                      );
+                      if (!blocked) return deleteBtn;
+                      return (
+                        <Tooltip>
+                          <TooltipTrigger asChild><span>{deleteBtn}</span></TooltipTrigger>
+                          <TooltipContent>
+                            আগে {d.totalFarmers}জন কৃষক ও {d.totalLands}টি জমি মৌসুম থেকে সরান
+                          </TooltipContent>
+                        </Tooltip>
+                      );
+                    })()}
                   </div>
                 </CardContent>
               </Card>
@@ -285,6 +352,51 @@ export default function SeasonList() {
             <Button variant="outline" onClick={() => setShowForm(false)}>বাতিল</Button>
             <Button onClick={handleSave} disabled={saving}>
               {saving ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />সংরক্ষণ হচ্ছে...</> : "সংরক্ষণ করুন"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Season Dialog */}
+      <Dialog open={!!editing} onOpenChange={(o) => !o && setEditing(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader><DialogTitle>মৌসুম সম্পাদনা করুন</DialogTitle></DialogHeader>
+          {editing && (
+            <div className="space-y-3 py-2">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <Label>মৌসুমের নাম (ইংরেজি) *</Label>
+                  <Input value={editing.seasonName} onChange={(e) => setEditing({ ...editing, seasonName: e.target.value })} />
+                </div>
+                <div className="space-y-1">
+                  <Label>মৌসুমের নাম (বাংলা) *</Label>
+                  <Input value={editing.seasonNameBengali} onChange={(e) => setEditing({ ...editing, seasonNameBengali: e.target.value })} />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <Label>শুরুর তারিখ *</Label>
+                  <Input type="date" value={editing.startDate} onChange={(e) => setEditing({ ...editing, startDate: e.target.value })} />
+                </div>
+                <div className="space-y-1">
+                  <Label>শেষের তারিখ *</Label>
+                  <Input type="date" value={editing.endDate} onChange={(e) => setEditing({ ...editing, endDate: e.target.value })} />
+                </div>
+              </div>
+              <div className="space-y-1">
+                <Label>বছর *</Label>
+                <Input type="number" value={editing.year} onChange={(e) => setEditing({ ...editing, year: parseInt(e.target.value) || editing.year })} />
+              </div>
+              <div className="space-y-1">
+                <Label>বিবরণ</Label>
+                <Input value={editing.description ?? ""} onChange={(e) => setEditing({ ...editing, description: e.target.value })} />
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditing(null)}>বাতিল</Button>
+            <Button onClick={handleUpdate} disabled={editSaving}>
+              {editSaving ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />সংরক্ষণ হচ্ছে...</> : "সংরক্ষণ করুন"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -347,7 +459,7 @@ export default function SeasonList() {
           <AlertDialogHeader>
             <AlertDialogTitle>মৌসুম মুছতে চান?</AlertDialogTitle>
             <AlertDialogDescription>
-              "{deleting?.seasonNameBengali}" মৌসুম মুছে যাবে। এটি পূর্বাবস্থায় ফেরানো যাবে না।
+              "{deleting?.seasonNameBengali}" মৌসুম, এর সকল পেমেন্ট ও একক মূল্য মুছে যাবে। এটি পূর্বাবস্থায় ফেরানো যাবে না।
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

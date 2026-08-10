@@ -1,5 +1,5 @@
 import type {
-  AuthResponse, User, Pump, Farmer, Land, UnitPrice, Payment, DashboardStats,
+  AuthResponse, User, Pump, Farmer, Land, LandSummary, UnitPrice, Payment, DashboardStats,
   FarmerPortalData, LoginRequest, RefreshTokenRequest, CreateUserRequest,
   UpdateUserRequest, CreatePumpRequest, CreateFarmerRequest, CreateLandRequest, UpdateLandRequest,
   CreateUnitPriceRequest, UpdateUnitPriceRequest, CreatePaymentRequest, UpdatePaymentRequest,
@@ -23,11 +23,11 @@ export const tokenManager = {
   setToken: (token: string) => localStorage.setItem(TOKEN_KEY, token),
   getRefreshToken: (): string | null => localStorage.getItem(REFRESH_TOKEN_KEY),
   setRefreshToken: (token: string) => localStorage.setItem(REFRESH_TOKEN_KEY, token),
-  getUser: (): { userId: number; role: string } | null => {
+  getUser: (): { userId: number; role: string; username?: string; fullName?: string } | null => {
     const user = localStorage.getItem(USER_KEY);
     return user ? JSON.parse(user) : null;
   },
-  setUser: (user: { userId: number; role: string }) =>
+  setUser: (user: { userId: number; role: string; username?: string; fullName?: string }) =>
     localStorage.setItem(USER_KEY, JSON.stringify(user)),
   clear: () => {
     localStorage.removeItem(TOKEN_KEY);
@@ -103,7 +103,10 @@ export const authApi = {
     });
     tokenManager.setToken(`${response.type} ${response.accessToken}`);
     tokenManager.setRefreshToken(response.refreshToken);
-    tokenManager.setUser({ userId: response.userId, role: response.role });
+    tokenManager.setUser({
+      userId: response.userId, role: response.role,
+      username: response.username, fullName: response.fullName,
+    });
     return response;
   },
   userLogin: async (data: LoginRequest): Promise<AuthResponse> => {
@@ -112,7 +115,10 @@ export const authApi = {
     });
     tokenManager.setToken(`${response.type} ${response.accessToken}`);
     tokenManager.setRefreshToken(response.refreshToken);
-    tokenManager.setUser({ userId: response.userId, role: response.role });
+    tokenManager.setUser({
+      userId: response.userId, role: response.role,
+      username: response.username, fullName: response.fullName,
+    });
     return response;
   },
   logout: async (): Promise<void> => {
@@ -225,6 +231,8 @@ export const landApi = {
     if (query) qs.append("query", query);
     return apiRequest<PageResponse<Land>>(`/lands/paged?${qs}`);
   },
+  getSummary: async (pumpId: number): Promise<LandSummary> =>
+    apiRequest<LandSummary>(`/lands/summary?pumpId=${pumpId}`),
   getById: async (id: number): Promise<Land> => apiRequest<Land>(`/lands/${id}`),
   getAssignedPaged: async (pumpId: number, seasonId: number, year: number, page: number, size: number): Promise<PageResponse<Land>> =>
     apiRequest<PageResponse<Land>>(`/lands/assigned/paged?pumpId=${pumpId}&seasonId=${seasonId}&year=${year}&page=${page}&size=${size}`),

@@ -1,12 +1,25 @@
 import { useState } from "react";
-import { useNavigate, useLocation } from "react-router-dom";
+import { useNavigate, useLocation, Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem,
+  DropdownMenuLabel, DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu";
+import {
+  Breadcrumb, BreadcrumbList, BreadcrumbItem, BreadcrumbLink, BreadcrumbPage, BreadcrumbSeparator,
+} from "@/components/ui/breadcrumb";
 import { useAuth } from "@/contexts/AuthContext";
-import { Droplet, LogOut, Menu, X } from "lucide-react";
+import { usePumpContext } from "@/contexts/PumpContext";
+import { Droplet, LogOut, Menu, X, User, ChevronDown, MapPin, Users } from "lucide-react";
 
 interface NavItem {
   label: string;
   path: string;
+}
+
+interface BreadcrumbExtra {
+  label: string;
+  to: string;
 }
 
 interface AppNavbarProps {
@@ -14,18 +27,57 @@ interface AppNavbarProps {
   subtitle?: string;
   navItems: NavItem[];
   rightContent?: React.ReactNode;
+  /** Extra clickable crumbs inserted between the pump/year/season context and the current page
+   *  — e.g. a farmer's name linking back to their detail page from a payments/lands/ledger tab. */
+  breadcrumbExtra?: BreadcrumbExtra[];
 }
 
-const AppNavbar = ({ title, subtitle, navItems, rightContent }: AppNavbarProps) => {
+const ALL_LAND_PATH: Record<string, string> = { ADMIN: "/admin/lands", USER: "/user/lands/master-list" };
+const ALL_FARMER_PATH: Record<string, string> = { ADMIN: "/admin/farmers", USER: "/user/farmers/master-list" };
+const HOME_PATH: Record<string, string> = { ADMIN: "/admin/dashboard", USER: "/user/dashboard" };
+const NO_CONTEXT_PATHS = new Set([
+  "/user/dashboard", "/admin/dashboard", "/user/farmers/master-list", "/user/lands/master-list",
+]);
+
+function useBreadcrumbs(title: string, extra?: BreadcrumbExtra[]) {
+  const location = useLocation();
+  const { user } = useAuth();
+  const { pumps, pumpId, year, selectedSeason } = usePumpContext();
+  const role = user?.role ?? "USER";
+  const homePath = HOME_PATH[role];
+
+  if (location.pathname === homePath) return null;
+
+  const crumbs: { label: string; to?: string }[] = [{ label: "হোম", to: homePath }];
+
+  if (location.pathname.startsWith("/user/") && !NO_CONTEXT_PATHS.has(location.pathname)) {
+    const pump = pumps.find((p) => p.id === pumpId);
+    if (pump) crumbs.push({ label: pump.pumpNameBengali });
+    if (year) crumbs.push({ label: String(year) });
+    if (selectedSeason && location.pathname !== "/user/seasons") {
+      crumbs.push({ label: selectedSeason.seasonNameBengali });
+    }
+  }
+
+  extra?.forEach((e) => crumbs.push({ label: e.label, to: e.to }));
+  crumbs.push({ label: title });
+  return crumbs;
+}
+
+const AppNavbar = ({ title, subtitle, navItems, rightContent, breadcrumbExtra }: AppNavbarProps) => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
-  const { logout } = useAuth();
+  const { logout, user } = useAuth();
+  const role = user?.role ?? "USER";
+  const breadcrumbs = useBreadcrumbs(title, breadcrumbExtra);
 
   const handleLogout = async () => {
     await logout();
     navigate("/auth");
   };
+
+  const displayName = user?.fullName || user?.username;
 
   return (
     <nav className="bg-card border-b border-border px-4 md:px-6 py-3">
@@ -54,10 +106,29 @@ const AppNavbar = ({ title, subtitle, navItems, rightContent }: AppNavbarProps) 
                 {item.label}
               </Button>
             ))}
-            <Button variant="outline" size="sm" onClick={handleLogout}>
-              <LogOut className="w-4 h-4 mr-1" />
-              Logout
-            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm" className="gap-1.5">
+                  <User className="w-4 h-4" />
+                  <span className="max-w-[10rem] truncate">{displayName || "প্রোফাইল"}</span>
+                  <ChevronDown className="w-3.5 h-3.5 opacity-60" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                {displayName && <DropdownMenuLabel className="truncate">{displayName}</DropdownMenuLabel>}
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => navigate(ALL_LAND_PATH[role])}>
+                  <MapPin className="w-4 h-4 mr-2" /> সকল জমির তালিকা
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => navigate(ALL_FARMER_PATH[role])}>
+                  <Users className="w-4 h-4 mr-2" /> সকল কৃষকের তালিকা
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={handleLogout}>
+                  <LogOut className="w-4 h-4 mr-2" /> Logout
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
 
           {/* Mobile hamburger */}
@@ -71,7 +142,29 @@ const AppNavbar = ({ title, subtitle, navItems, rightContent }: AppNavbarProps) 
           </Button>
         </div>
 
-        {/* Row 2 (desktop): rightContent (PumpSelector, etc.) on its own line */}
+        {/* Row 2: breadcrumbs */}
+        {breadcrumbs && (
+          <Breadcrumb>
+            <BreadcrumbList className="flex-nowrap overflow-x-auto whitespace-nowrap [&::-webkit-scrollbar]:hidden">
+              {breadcrumbs.map((crumb, i) => (
+                <span key={i} className="flex items-center gap-1.5 md:gap-2.5">
+                  {i > 0 && <BreadcrumbSeparator />}
+                  <BreadcrumbItem>
+                    {crumb.to && i < breadcrumbs.length - 1 ? (
+                      <BreadcrumbLink asChild>
+                        <Link to={crumb.to}>{crumb.label}</Link>
+                      </BreadcrumbLink>
+                    ) : (
+                      <BreadcrumbPage>{crumb.label}</BreadcrumbPage>
+                    )}
+                  </BreadcrumbItem>
+                </span>
+              ))}
+            </BreadcrumbList>
+          </Breadcrumb>
+        )}
+
+        {/* Row 3 (desktop): rightContent (PumpSelector, etc.) on its own line */}
         {rightContent && (
           <div className="hidden md:flex items-center gap-2 flex-wrap">
             {rightContent}
@@ -96,6 +189,25 @@ const AppNavbar = ({ title, subtitle, navItems, rightContent }: AppNavbarProps) 
               </Button>
             ))}
             {rightContent && <div className="py-1">{rightContent}</div>}
+            {displayName && (
+              <div className="px-2 py-1.5 text-sm text-muted-foreground truncate">{displayName}</div>
+            )}
+            <Button
+              variant="ghost"
+              className="w-full justify-start"
+              size="sm"
+              onClick={() => { navigate(ALL_LAND_PATH[role]); setMobileMenuOpen(false); }}
+            >
+              <MapPin className="w-4 h-4 mr-2" /> সকল জমির তালিকা
+            </Button>
+            <Button
+              variant="ghost"
+              className="w-full justify-start"
+              size="sm"
+              onClick={() => { navigate(ALL_FARMER_PATH[role]); setMobileMenuOpen(false); }}
+            >
+              <Users className="w-4 h-4 mr-2" /> সকল কৃষকের তালিকা
+            </Button>
             <Button variant="outline" className="w-full justify-start" size="sm" onClick={handleLogout}>
               <LogOut className="w-4 h-4 mr-1" />
               Logout

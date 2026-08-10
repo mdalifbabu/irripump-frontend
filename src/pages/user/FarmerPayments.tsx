@@ -346,6 +346,10 @@ const FarmerPayments = () => {
         title={`${farmer?.nameBengali || "কৃষক"} — পেমেন্ট`}
         subtitle={farmer?.farmerCode ?? ""}
         navItems={userNavItems}
+        breadcrumbExtra={[
+          { label: "কৃষক তালিকা", to: "/user/farmers" },
+          { label: farmer?.nameBengali || "কৃষক", to: `/user/farmers/${farmerId}` },
+        ]}
         rightContent={
           <div className="flex flex-wrap gap-2 items-center">
             <PumpSelector />

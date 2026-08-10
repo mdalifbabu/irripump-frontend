@@ -49,6 +49,10 @@ const FarmerLedger = () => {
         title="পেমেন্ট খাতা"
         subtitle={ledger ? `${ledger.nameBengali} — ${ledger.farmerCode}` : ""}
         navItems={userNavItems}
+        breadcrumbExtra={[
+          { label: "কৃষক তালিকা", to: "/user/farmers" },
+          { label: ledger?.nameBengali || "কৃষক", to: `/user/farmers/${farmerId}` },
+        ]}
         rightContent={
           <Button variant="outline" size="sm" onClick={() => navigate(-1)}>
             <ArrowLeft className="w-4 h-4 mr-1" />ফিরে যান
