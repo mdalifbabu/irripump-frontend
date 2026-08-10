@@ -4,6 +4,8 @@ export interface AuthResponse {
   refreshToken: string;
   type: string;
   userId: number;
+  username?: string;
+  fullName?: string;
   role: "ADMIN" | "USER";
 }
 
@@ -67,6 +69,15 @@ export interface Land {
   isActive?: boolean;
   createdAt?: string;
   updatedAt?: string;
+  // Assignment status against the pump's current season (null/false if the pump has no
+  // current season) — populated on the season-independent global land list.
+  assignedInCurrentSeason?: boolean;
+  assignedFarmerName?: string;
+}
+
+export interface LandSummary {
+  totalCount: number;
+  totalSizeShatak: number;
 }
 
 export interface FarmerLandAssignment {

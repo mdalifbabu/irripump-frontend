@@ -16,7 +16,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { usePumpContext } from "@/contexts/PumpContext";
 import { landApi } from "@/lib/api/client";
-import type { Land } from "@/lib/api/types";
+import type { Land, LandSummary } from "@/lib/api/types";
 import { Plus, Loader2, Pencil, Trash2, MapPin, Search, X } from "lucide-react";
 import AppNavbar from "@/components/AppNavbar";
 import PumpSelector from "@/components/PumpSelector";
@@ -45,6 +45,7 @@ const LandMasterList = () => {
   const [totalElements, setTotalElements] = useState(0);
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(false);
+  const [summary, setSummary] = useState<LandSummary | null>(null);
 
   const [submitting, setSubmitting] = useState(false);
   const [showForm, setShowForm] = useState(false);
@@ -68,7 +69,7 @@ const LandMasterList = () => {
   }, [isLoading, isAuthenticated, navigate]);
 
   useEffect(() => {
-    if (pumpId) fetchLandsPaged(0);
+    if (pumpId) { fetchLandsPaged(0); fetchSummary(); }
   }, [pumpId]);
 
   const fetchLandsPaged = async (page: number, q?: string) => {
@@ -84,6 +85,13 @@ const LandMasterList = () => {
     finally { setLoading(false); }
   };
 
+  const fetchSummary = async () => {
+    if (!pumpId) return;
+    try {
+      setSummary(await landApi.getSummary(pumpId));
+    } catch { /* silent */ }
+  };
+
   const onSubmit = async (data: FormData) => {
     if (!pumpId) return;
     setSubmitting(true);
@@ -93,6 +101,7 @@ const LandMasterList = () => {
       form.reset({ landmarkNumber: "", sizeBigha: 0, description: "", tag: "" });
       setShowForm(false);
       fetchLandsPaged(0);
+      fetchSummary();
     } catch (e: any) {
       toast({ title: "ত্রুটি", description: e.message, variant: "destructive" });
     } finally { setSubmitting(false); }
@@ -111,6 +120,7 @@ const LandMasterList = () => {
       toast({ title: "আপডেট সফল" });
       setEditing(null);
       fetchLandsPaged(page);
+      fetchSummary();
     } catch (e: any) { toast({ title: "ত্রুটি", description: e.message, variant: "destructive" }); }
     finally { setBusy(false); }
   };
@@ -123,6 +133,7 @@ const LandMasterList = () => {
       toast({ title: "মুছে ফেলা হয়েছে" });
       setDeleting(null);
       fetchLandsPaged(0);
+      fetchSummary();
     } catch (e: any) { toast({ title: "ত্রুটি", description: e.message, variant: "destructive" }); }
     finally { setBusy(false); }
   };
@@ -179,10 +190,18 @@ const LandMasterList = () => {
         <Card>
           <CardHeader>
             <div className="flex items-center justify-between flex-wrap gap-2">
-              <CardTitle className="flex items-center gap-2">
-                <MapPin className="w-5 h-5" />
-                সকল জমির তালিকা ({totalElements})
-              </CardTitle>
+              <div>
+                <CardTitle className="flex items-center gap-2">
+                  <MapPin className="w-5 h-5" />
+                  সকল জমির তালিকা ({totalElements})
+                </CardTitle>
+                {summary && (
+                  <p className="text-sm text-muted-foreground mt-1">
+                    মোট: <span className="font-semibold text-foreground">{summary.totalSizeShatak.toFixed(2)} শতক</span>
+                    {" "}(≈ {(summary.totalSizeShatak / 33).toFixed(3)} বিঘা)
+                  </p>
+                )}
+              </div>
               <div className="flex gap-2">
                 <Input
                   placeholder="দাগ নম্বর বা ট্যাগ"
@@ -209,6 +228,7 @@ const LandMasterList = () => {
                       <TableHead>দাগ/খতিয়ান</TableHead>
                       <TableHead>শতক</TableHead>
                       <TableHead>ট্যাগ</TableHead>
+                      <TableHead>বরাদ্দ (বর্তমান মৌসুম)</TableHead>
                       <TableHead>অবস্থা</TableHead>
                       <TableHead>অ্যাকশন</TableHead>
                     </TableRow>
@@ -222,6 +242,13 @@ const LandMasterList = () => {
                           <br /><span className="text-xs text-muted-foreground">{((land.sizeShatak ?? 0) / 33).toFixed(3)} বিঘা</span>
                         </TableCell>
                         <TableCell className="text-sm text-muted-foreground">{land.tag ?? "-"}</TableCell>
+                        <TableCell>
+                          {land.assignedInCurrentSeason ? (
+                            <span className="text-sm">{land.assignedFarmerName}</span>
+                          ) : (
+                            <Badge variant="outline">খালি</Badge>
+                          )}
+                        </TableCell>
                         <TableCell>
                           <Badge variant={land.isActive ? "default" : "secondary"}>
                             {land.isActive ? "সক্রিয়" : "নিষ্ক্রিয়"}

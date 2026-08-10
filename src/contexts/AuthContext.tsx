@@ -4,7 +4,7 @@ import type { AuthResponse } from "@/lib/api/types";
 
 interface AuthContextType {
   isAuthenticated: boolean;
-  user: { userId: number; role: string } | null;
+  user: { userId: number; role: string; username?: string; fullName?: string } | null;
   isLoading: boolean;
   adminLogin: (username: string, password: string) => Promise<AuthResponse>;
   userLogin: (username: string, password: string) => Promise<AuthResponse>;
@@ -14,14 +14,14 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
-  const [user, setUser] = useState<{ userId: number; role: string } | null>(null);
+  const [user, setUser] = useState<{ userId: number; role: string; username?: string; fullName?: string } | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     // Check for existing session
     const storedUser = tokenManager.getUser();
     const token = tokenManager.getToken();
-    
+
     if (storedUser && token) {
       setUser(storedUser);
     }
@@ -30,13 +30,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const adminLogin = async (username: string, password: string) => {
     const response = await authApi.adminLogin({ username, password });
-    setUser({ userId: response.userId, role: response.role });
+    setUser({ userId: response.userId, role: response.role, username: response.username, fullName: response.fullName });
     return response;
   };
 
   const userLogin = async (username: string, password: string) => {
     const response = await authApi.userLogin({ username, password });
-    setUser({ userId: response.userId, role: response.role });
+    setUser({ userId: response.userId, role: response.role, username: response.username, fullName: response.fullName });
     return response;
   };
 
