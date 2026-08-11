@@ -243,8 +243,15 @@ const LandMasterList = () => {
                         </TableCell>
                         <TableCell className="text-sm text-muted-foreground">{land.tag ?? "-"}</TableCell>
                         <TableCell>
-                          {land.assignedInCurrentSeason ? (
-                            <span className="text-sm">{land.assignedFarmerName}</span>
+                          {land.assignedFarmerName ? (
+                            <div>
+                              <span className="text-sm">{land.assignedFarmerName}</span>
+                              <div className="text-xs text-muted-foreground">
+                                {land.assignedInCurrentSeason
+                                  ? "বর্তমান মৌসুম"
+                                  : `সর্বশেষ: ${land.assignedSeasonName ?? ""} ${land.assignedYear ?? ""}`.trim()}
+                              </div>
+                            </div>
                           ) : (
                             <Badge variant="outline">খালি</Badge>
                           )}
