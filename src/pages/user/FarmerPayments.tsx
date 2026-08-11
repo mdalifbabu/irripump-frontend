@@ -33,7 +33,6 @@ const schema = z.object({
   paymentDate: z.string().min(1),
   paymentMethod: z.enum(["CASH", "BANK", "MOBILE_BANKING"]),
   transactionReference: z.string().optional(),
-  paymentType: z.enum(["PAYMENT", "ADJUSTMENT", "DEDUCTION"]),
 });
 type FormData = z.infer<typeof schema>;
 
@@ -43,7 +42,6 @@ const methodColor: Record<string, string> = {
   BANK: "bg-blue-500 text-white",
   MOBILE_BANKING: "bg-pink-500 text-white",
 };
-const typeLabel: Record<string, string> = { PAYMENT: "পেমেন্ট", ADJUSTMENT: "সমন্বয়", DEDUCTION: "কর্তন" };
 
 const FarmerPayments = () => {
   const { farmerId } = useParams<{ farmerId: string }>();
@@ -74,7 +72,6 @@ const FarmerPayments = () => {
       amount: undefined,
       paymentDate: new Date().toISOString().split("T")[0],
       paymentMethod: "CASH" as const,
-      paymentType: "PAYMENT" as const,
       transactionReference: "",
     },
   });
@@ -421,29 +418,13 @@ const FarmerPayments = () => {
                       </FormItem>
                     )} />
                   </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <FormField control={form.control} name="paymentType" render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>ধরন</FormLabel>
-                        <Select onValueChange={field.onChange} defaultValue={field.value}>
-                          <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
-                          <SelectContent>
-                            <SelectItem value="PAYMENT">পেমেন্ট</SelectItem>
-                            <SelectItem value="ADJUSTMENT">সমন্বয়</SelectItem>
-                            <SelectItem value="DEDUCTION">কর্তন</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
-                    )} />
-                    <FormField control={form.control} name="transactionReference" render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Transaction Ref</FormLabel>
-                        <FormControl><Input {...field} /></FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )} />
-                  </div>
+                  <FormField control={form.control} name="transactionReference" render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Transaction Ref</FormLabel>
+                      <FormControl><Input {...field} /></FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )} />
                   <div className="flex gap-2 justify-end">
                     <Button type="button" variant="outline" onClick={() => setShowForm(false)}>বাতিল</Button>
                     <Button type="submit" disabled={submitting}>
@@ -492,11 +473,6 @@ const FarmerPayments = () => {
                           <Badge className={`${methodColor[p.paymentMethod] || ""} text-xs`}>
                             {methodLabel[p.paymentMethod] || p.paymentMethod}
                           </Badge>
-                          {p.paymentType !== "PAYMENT" && (
-                            <Badge variant="outline" className="text-xs">
-                              {typeLabel[p.paymentType] || p.paymentType}
-                            </Badge>
-                          )}
                           {p.isReversed && <Badge variant="destructive" className="text-xs">বাতিল</Badge>}
                         </div>
                         <p className="text-sm text-muted-foreground mt-0.5">{p.paymentDate}</p>

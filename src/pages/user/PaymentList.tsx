@@ -21,7 +21,6 @@ import { Download, FileText, Loader2, Search, X, CalendarDays, Image, Printer } 
 const PAGE_SIZE = 20;
 const fmt = (n: number) => `৳${Number(n).toLocaleString("bn-BD")}`;
 const methodLabel: Record<string, string> = { CASH: "নগদ", BANK: "ব্যাংক", MOBILE_BANKING: "মোবাইল ব্যাংকিং" };
-const typeLabel: Record<string, string> = { PAYMENT: "পেমেন্ট", ADJUSTMENT: "সমন্বয়", DEDUCTION: "কর্তন" };
 
 const PaymentList = () => {
   const [payments, setPayments] = useState<PaymentResponse[]>([]);
@@ -329,7 +328,6 @@ const PaymentList = () => {
                       <TableHead>তারিখ</TableHead>
                       <TableHead>কৃষক</TableHead>
                       <TableHead>পরিমাণ</TableHead>
-                      <TableHead>ধরন</TableHead>
                       <TableHead>পদ্ধতি</TableHead>
                       <TableHead className="hidden md:table-cell">রেফারেন্স</TableHead>
                       <TableHead>অবস্থা</TableHead>
@@ -349,7 +347,6 @@ const PaymentList = () => {
                           </Link>
                         </TableCell>
                         <TableCell className="font-bold">{fmt(p.amount)}</TableCell>
-                        <TableCell><Badge variant="outline">{typeLabel[p.paymentType] ?? p.paymentType}</Badge></TableCell>
                         <TableCell className="text-sm">{methodLabel[p.paymentMethod] ?? p.paymentMethod}</TableCell>
                         <TableCell className="hidden md:table-cell text-xs text-muted-foreground">{p.transactionReference ?? "-"}</TableCell>
                         <TableCell>

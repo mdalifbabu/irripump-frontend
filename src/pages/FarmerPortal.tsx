@@ -209,7 +209,6 @@ const FarmerPortal = () => {
                         <TableHead>পরিমাণ</TableHead>
                         <TableHead>পদ্ধতি</TableHead>
                         <TableHead>রেফারেন্স</TableHead>
-                        <TableHead>ধরন</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -219,15 +218,6 @@ const FarmerPortal = () => {
                           <TableCell className="font-medium">৳{payment.amount.toFixed(2)}</TableCell>
                           <TableCell>{payment.paymentMethod}</TableCell>
                           <TableCell>{payment.transactionReference || "—"}</TableCell>
-                          <TableCell>
-                            <span className={`px-2 py-1 rounded text-xs ${
-                              payment.paymentType === "PAYMENT" ? "bg-green-100 text-green-700"
-                                : payment.paymentType === "DEDUCTION" ? "bg-red-100 text-red-700"
-                                : "bg-blue-100 text-blue-700"
-                            }`}>
-                              {payment.paymentType === "PAYMENT" ? "পেমেন্ট" : payment.paymentType === "ADJUSTMENT" ? "সমন্বয়" : "কর্তন"}
-                            </span>
-                          </TableCell>
                         </TableRow>
                       ))}
                     </TableBody>

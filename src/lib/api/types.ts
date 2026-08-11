@@ -418,7 +418,6 @@ export interface CreatePaymentRequest {
   paymentDate: string;
   paymentMethod: "CASH" | "BANK" | "MOBILE_BANKING";
   transactionReference?: string;
-  paymentType: "PAYMENT" | "ADJUSTMENT" | "DEDUCTION";
 }
 
 export interface UpdatePaymentRequest {
