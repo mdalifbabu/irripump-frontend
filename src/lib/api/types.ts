@@ -69,10 +69,16 @@ export interface Land {
   isActive?: boolean;
   createdAt?: string;
   updatedAt?: string;
-  // Assignment status against the pump's current season (null/false if the pump has no
-  // current season) — populated on the season-independent global land list.
+  // Assignee shown on the season-independent global land list. Rule: prefer the pump's
+  // current season's active assignment; if the land isn't assigned there (or the pump has no
+  // current season), fall back to its most recent active assignment across all seasons/years.
+  // assignedInCurrentSeason distinguishes which case this is so the UI can label it
+  // ("বর্তমান মৌসুম" vs "সর্বশেষ: {assignedSeasonName} {assignedYear}"); assignedFarmerName is
+  // undefined only when the land has never had an active assignment at all.
   assignedInCurrentSeason?: boolean;
   assignedFarmerName?: string;
+  assignedSeasonName?: string;
+  assignedYear?: number;
 }
 
 export interface LandSummary {
