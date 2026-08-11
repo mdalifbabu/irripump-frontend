@@ -158,7 +158,11 @@ const FarmerMasterList = () => {
                   </TableHeader>
                   <TableBody>
                     {farmers.map((f) => (
-                      <TableRow key={f.id}>
+                      <TableRow
+                        key={f.id}
+                        className="cursor-pointer hover:bg-muted/50"
+                        onClick={() => navigate(`/user/farmers/${f.id}`)}
+                      >
                         <TableCell className="font-mono text-sm">{f.farmerCode}</TableCell>
                         <TableCell className="font-medium">{f.nameBengali}</TableCell>
                         <TableCell>{f.village}</TableCell>
@@ -168,7 +172,7 @@ const FarmerMasterList = () => {
                             {f.isActive ? "সক্রিয়" : "নিষ্ক্রিয়"}
                           </Badge>
                         </TableCell>
-                        <TableCell>
+                        <TableCell onClick={(e) => e.stopPropagation()}>
                           <div className="flex gap-1">
                             <Button size="icon" variant="outline" className="h-8 w-8" onClick={() => {
                               setEditing(f);
