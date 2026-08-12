@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate, useLocation, Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import {
@@ -39,6 +39,50 @@ const NO_CONTEXT_PATHS = new Set([
   "/user/dashboard", "/admin/dashboard", "/user/farmers/master-list", "/user/lands/master-list",
 ]);
 
+// Every real section root a pump/year/season change is allowed to land on. Anything not listed
+// here falls back to the role's dashboard instead.
+const KNOWN_SECTION_ROOTS: Record<string, string[]> = {
+  USER: ["/user/dashboard", "/user/farmers", "/user/lands", "/user/seasons", "/user/payments", "/user/unit-prices"],
+  ADMIN: ["/admin/dashboard", "/admin/pumps", "/admin/users", "/admin/farmers", "/admin/lands", "/admin/unit-prices", "/admin/seasons", "/admin/audit-log"],
+};
+
+function sectionRootFor(pathname: string, role: string): string {
+  const known = KNOWN_SECTION_ROOTS[role] ?? KNOWN_SECTION_ROOTS.USER;
+  const parts = pathname.split("/").filter(Boolean);
+  if (parts.length >= 2) {
+    const candidate = `/${parts[0]}/${parts[1]}`;
+    if (known.includes(candidate)) return candidate;
+  }
+  return HOME_PATH[role] ?? HOME_PATH.USER;
+}
+
+/**
+ * A farmer/land opened under the old pump/year/season stops making sense the moment any of
+ * those change — its id, payments, or assignments belonged to a different context. Rather than
+ * leave a stale/mismatched detail page on screen, drop back to that section's root list (or the
+ * dashboard, if the current path isn't a recognized section) once the user actually changes
+ * context — never on the page's own initial mount.
+ */
+function useRedirectToSectionRootOnContextChange(role: string) {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const { pumpId, year, selectedSeason } = usePumpContext();
+  const seasonId = selectedSeason?.id ?? null;
+  const isFirstRun = useRef(true);
+
+  useEffect(() => {
+    if (isFirstRun.current) {
+      isFirstRun.current = false;
+      return;
+    }
+    if (NO_CONTEXT_PATHS.has(location.pathname)) return;
+    const root = sectionRootFor(location.pathname, role);
+    if (root !== location.pathname) navigate(root);
+    // Only pump/year/season changes should trigger this — not route changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pumpId, year, seasonId]);
+}
+
 function useBreadcrumbs(title: string, extra?: BreadcrumbExtra[]) {
   const location = useLocation();
   const { user } = useAuth();
@@ -71,6 +115,7 @@ const AppNavbar = ({ title, subtitle, navItems, rightContent, breadcrumbExtra }:
   const { logout, user } = useAuth();
   const role = user?.role ?? "USER";
   const breadcrumbs = useBreadcrumbs(title, breadcrumbExtra);
+  useRedirectToSectionRootOnContextChange(role);
 
   const handleLogout = async () => {
     await logout();
