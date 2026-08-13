@@ -19,6 +19,7 @@ import { farmerApi, paymentApi, invoiceApi, ledgerApi } from "@/lib/api/client";
 import type { FarmerDetailResponse } from "@/lib/api/types";
 import { buildReceiptHtml, printReceiptHtml, downloadReceiptAsPng } from "@/lib/invoice/buildReceiptHtml";
 import { thermalPrintReceipt } from "@/lib/invoice/thermalPrinter";
+import { buildFarmerPortalUrl } from "@/lib/farmerPortal";
 import type { Farmer, Payment } from "@/lib/api/types";
 import { Plus, Loader2, Download, Pencil, Trash2, FileText, Image, Printer } from "lucide-react";
 import AppNavbar from "@/components/AppNavbar";
@@ -189,7 +190,10 @@ const FarmerPayments = () => {
         otherSeasonDues: ledger.seasons
           .filter((s) => s.seasonId !== selectedSeason?.id && s.outstanding > 0)
           .map((s) => ({ seasonName: s.seasonName, year: s.year, due: s.outstanding })),
-        farmerPortalUrl: `https://www.irripump.com/farmer?code=${invoiceData.farmer.identifier}`,
+        farmerPortalUrl: buildFarmerPortalUrl({
+          portalToken: invoiceData.farmer.portalToken,
+          farmerCode: invoiceData.farmer.identifier,
+        }),
       });
       printReceiptHtml(html);
       toast({ title: "প্রিন্ট হচ্ছে..." });
@@ -232,7 +236,10 @@ const FarmerPayments = () => {
         otherSeasonDues: ledger.seasons
           .filter((s) => s.seasonId !== selectedSeason?.id && s.outstanding > 0)
           .map((s) => ({ seasonName: s.seasonName, year: s.year, due: s.outstanding })),
-        farmerPortalUrl: `https://www.irripump.com/farmer?code=${invoiceData.farmer.identifier}`,
+        farmerPortalUrl: buildFarmerPortalUrl({
+          portalToken: invoiceData.farmer.portalToken,
+          farmerCode: invoiceData.farmer.identifier,
+        }),
       });
       await downloadReceiptAsPng(html, invoiceData.invoiceNo);
       toast({ title: "PNG ডাউনলোড হচ্ছে..." });
@@ -275,7 +282,10 @@ const FarmerPayments = () => {
         otherSeasonDues: ledger.seasons
           .filter((s) => s.seasonId !== selectedSeason?.id && s.outstanding > 0)
           .map((s) => ({ seasonName: s.seasonName, year: s.year, due: s.outstanding })),
-        farmerPortalUrl: `https://www.irripump.com/farmer?code=${invoiceData.farmer.identifier}`,
+        farmerPortalUrl: buildFarmerPortalUrl({
+          portalToken: invoiceData.farmer.portalToken,
+          farmerCode: invoiceData.farmer.identifier,
+        }),
       });
       await thermalPrintReceipt(html);
       toast({ title: "থার্মাল প্রিন্ট হচ্ছে..." });
@@ -315,7 +325,10 @@ const FarmerPayments = () => {
         })),
         selectedSeasonTotal: farmerDetail?.calculatedCost ?? 0,
         selectedSeasonDue: due > 0 ? due : -(farmerDetail?.advanceAmount ?? 0),
-        farmerPortalUrl: `https://www.irripump.com/farmer?code=${farmer.farmerCode}`,
+        farmerPortalUrl: buildFarmerPortalUrl({
+          portalToken: farmer.portalToken,
+          farmerCode: farmer.farmerCode,
+        }),
       });
       printReceiptHtml(html);
       toast({ title: "প্রিন্ট হচ্ছে..." });

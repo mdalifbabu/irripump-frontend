@@ -12,6 +12,7 @@ import { paymentApi, invoiceApi, ledgerApi } from "@/lib/api/client";
 import type { PaymentResponse } from "@/lib/api/types";
 import { buildReceiptHtml, printReceiptHtml, downloadReceiptAsPng } from "@/lib/invoice/buildReceiptHtml";
 import { thermalPrintReceipt } from "@/lib/invoice/thermalPrinter";
+import { buildFarmerPortalUrl } from "@/lib/farmerPortal";
 import AppNavbar from "@/components/AppNavbar";
 import PumpSelector from "@/components/PumpSelector";
 import PaginationBar from "@/components/PaginationBar";
@@ -118,7 +119,10 @@ const PaymentList = () => {
         otherSeasonDues: ledger.seasons
           .filter((s) => s.seasonId !== selectedSeason?.id && s.outstanding > 0)
           .map((s) => ({ seasonName: s.seasonName, year: s.year, due: s.outstanding })),
-        farmerPortalUrl: `https://www.irripump.com/farmer?code=${invoiceData.farmer.identifier}`,
+        farmerPortalUrl: buildFarmerPortalUrl({
+          portalToken: invoiceData.farmer.portalToken,
+          farmerCode: invoiceData.farmer.identifier,
+        }),
       });
       printReceiptHtml(html);
       toast({ title: "প্রিন্ট হচ্ছে..." });
@@ -151,7 +155,10 @@ const PaymentList = () => {
         selectedSeasonDue: selectedEntry?.outstanding ?? 0,
         otherSeasonDues: ledger.seasons.filter((s) => s.seasonId !== selectedSeason?.id && s.outstanding > 0)
           .map((s) => ({ seasonName: s.seasonName, year: s.year, due: s.outstanding })),
-        farmerPortalUrl: `https://www.irripump.com/farmer?code=${invoiceData.farmer.identifier}`,
+        farmerPortalUrl: buildFarmerPortalUrl({
+          portalToken: invoiceData.farmer.portalToken,
+          farmerCode: invoiceData.farmer.identifier,
+        }),
       });
       await downloadReceiptAsPng(html, invoiceData.invoiceNo);
       toast({ title: "PNG ডাউনলোড হচ্ছে..." });
@@ -192,7 +199,10 @@ const PaymentList = () => {
         otherSeasonDues: ledger.seasons
           .filter((s) => s.seasonId !== selectedSeason?.id && s.outstanding > 0)
           .map((s) => ({ seasonName: s.seasonName, year: s.year, due: s.outstanding })),
-        farmerPortalUrl: `https://www.irripump.com/farmer?code=${invoiceData.farmer.identifier}`,
+        farmerPortalUrl: buildFarmerPortalUrl({
+          portalToken: invoiceData.farmer.portalToken,
+          farmerCode: invoiceData.farmer.identifier,
+        }),
       });
       await thermalPrintReceipt(html);
       toast({ title: "থার্মাল প্রিন্ট হচ্ছে..." });
