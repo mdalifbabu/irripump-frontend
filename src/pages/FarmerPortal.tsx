@@ -22,10 +22,30 @@ const FarmerPortal = () => {
   const [farmerCode, setFarmerCode] = useState("");
   const [mobile, setMobile] = useState("");
   const [loading, setLoading] = useState(false);
+  const [tokenLoading, setTokenLoading] = useState(false);
   const [farmerData, setFarmerData] = useState<FarmerPortalData | null>(null);
   const { toast } = useToast();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+
+  // A token carries enough on its own to grant access (that's the whole point of a QR — zero
+  // typing), so this DOES auto-verify, unlike the code-only path below. This is the web
+  // fallback for the same QR/deep-link URL the app opens when installed.
+  useEffect(() => {
+    const token = searchParams.get("token");
+    if (!token) return;
+    setTokenLoading(true);
+    farmerPortalApi.verifyToken(token)
+      .then(setFarmerData)
+      .catch((error) => {
+        toast({
+          title: "ত্রুটি / Error",
+          description: error instanceof Error ? error.message : "লিংকটি বৈধ নয় বা মেয়াদ শেষ হয়ে গেছে",
+          variant: "destructive",
+        });
+      })
+      .finally(() => setTokenLoading(false));
+  }, []);
 
   // Pre-fill code from URL param but DO NOT auto-verify — user must supply mobile
   useEffect(() => {
@@ -111,12 +131,12 @@ const FarmerPortal = () => {
             </Card>
             <Card className="bg-red-50 dark:bg-red-950/20">
               <CardHeader className="flex flex-row items-center justify-between pb-2">
-                <CardTitle className="text-sm font-medium">মোট বকেয়া / Total Due</CardTitle>
+                <CardTitle className="text-sm font-medium">চলতি মৌসুম বকেয়া / Current Season Due</CardTitle>
                 <Wallet className="w-4 h-4 text-red-600" />
               </CardHeader>
               <CardContent>
                 <div className="text-3xl font-bold text-red-600">৳{farmerData.totalDue.toFixed(2)}</div>
-                <p className="text-xs text-muted-foreground mt-1">বর্তমান মৌসুম + পূর্ববর্তী বকেয়া</p>
+                <p className="text-xs text-muted-foreground mt-1">শুধুমাত্র চলতি মৌসুমের বকেয়া</p>
               </CardContent>
             </Card>
             <Card className="bg-orange-50 dark:bg-orange-950/20">
@@ -192,44 +212,53 @@ const FarmerPortal = () => {
             </CardContent>
           </Card>
 
-          {farmerData.currentSeasonId && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <CreditCard className="w-5 h-5" />বর্তমান মৌসুমের পেমেন্ট
-                </CardTitle>
-                <p className="text-xs text-muted-foreground">শুধু {currentSeasonLabel} — পূর্ববর্তী মৌসুমের পেমেন্ট উপরের লেজারে</p>
-              </CardHeader>
-              <CardContent>
-                {farmerData.payments.length > 0 ? (
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>তারিখ</TableHead>
-                        <TableHead>পরিমাণ</TableHead>
-                        <TableHead>পদ্ধতি</TableHead>
-                        <TableHead>রেফারেন্স</TableHead>
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <CreditCard className="w-5 h-5" />সাম্প্রতিক পেমেন্ট
+              </CardTitle>
+              <p className="text-xs text-muted-foreground">সকল মৌসুম মিলিয়ে সর্বশেষ ১০টি পেমেন্ট</p>
+            </CardHeader>
+            <CardContent>
+              {farmerData.payments.length > 0 ? (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>তারিখ</TableHead>
+                      <TableHead>পরিমাণ</TableHead>
+                      <TableHead>পদ্ধতি</TableHead>
+                      <TableHead>রেফারেন্স</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {farmerData.payments.map((payment) => (
+                      <TableRow key={payment.id}>
+                        <TableCell>{new Date(payment.paymentDate).toLocaleDateString("en-GB")}</TableCell>
+                        <TableCell className="font-medium">৳{payment.amount.toFixed(2)}</TableCell>
+                        <TableCell>{payment.paymentMethod}</TableCell>
+                        <TableCell>{payment.transactionReference || "—"}</TableCell>
                       </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {farmerData.payments.map((payment) => (
-                        <TableRow key={payment.id}>
-                          <TableCell>{new Date(payment.paymentDate).toLocaleDateString("en-GB")}</TableCell>
-                          <TableCell className="font-medium">৳{payment.amount.toFixed(2)}</TableCell>
-                          <TableCell>{payment.paymentMethod}</TableCell>
-                          <TableCell>{payment.transactionReference || "—"}</TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                ) : (
-                  <p className="text-muted-foreground text-center py-4">এই মৌসুমে এখনো কোনো পেমেন্ট নেই</p>
-                )}
-              </CardContent>
-            </Card>
-          )}
+                    ))}
+                  </TableBody>
+                </Table>
+              ) : (
+                <p className="text-muted-foreground text-center py-4">এখনো কোনো পেমেন্ট নেই</p>
+              )}
+            </CardContent>
+          </Card>
 
           <Button onClick={handleReset} variant="outline" className="w-full">লগআউট / Logout</Button>
+        </div>
+      </div>
+    );
+  }
+
+  if (tokenLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/20 via-background to-accent/20 p-4">
+        <div className="flex flex-col items-center gap-3 text-muted-foreground">
+          <div className="w-10 h-10 border-4 border-primary border-t-transparent rounded-full animate-spin" />
+          <p>তথ্য লোড হচ্ছে...</p>
         </div>
       </div>
     );

@@ -47,6 +47,7 @@ export interface Farmer {
   fatherName?: string;
   village: string;
   mobile: string;
+  portalToken?: string;
   email?: string;
   whatsapp?: string;
   nidNumber?: string;
@@ -522,7 +523,7 @@ export interface InvoiceResponse {
   pump: { name: string; identifier: string };
   operator: { name: string };
   season: { name?: string; type?: string; year?: number };
-  farmer: { name: string; identifier: string };
+  farmer: { name: string; identifier: string; portalToken?: string };
   lands: { landmarkNumber: string; area: string; tag?: string; sizeShatak?: number }[];
   payment: { amount: number; paidAt: string; method: string };
   allocations: { seasonName: string; dueDate: string; applied: number; remainingAfter: number }[];

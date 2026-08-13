@@ -516,6 +516,8 @@ export const farmerPortalApi = {
     apiRequest<FarmerPortalData>("/farmer-portal/verify-code", {
       method: "POST", body: JSON.stringify(data),
     }),
+  verifyToken: async (token: string): Promise<FarmerPortalData> =>
+    apiRequest<FarmerPortalData>(`/farmer-portal/token/${encodeURIComponent(token)}`),
 };
 
 // Ledger API
